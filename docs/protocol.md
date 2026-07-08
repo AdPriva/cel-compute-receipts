@@ -34,8 +34,9 @@ A receipt is JSON with these fields:
 Required verification fields:
 
 - `version`: must be `"cel/v0"`
-- `algorithm`: `"sha256"` by default; this implementation also accepts
-  `"sha512"`
+- `algorithm`: required in every receipt; `"sha256"` or `"sha512"`.
+  Provers default to `"sha256"` when creating receipts, but verifiers
+  reject receipts that omit the field
 - `depth`: positive safe integer
 - `epoch`: non-empty string
 - `context`: application-defined value
@@ -50,12 +51,19 @@ Unknown versions and algorithms must be rejected.
 
 The policy and non-string contexts are serialized with deterministic JSON:
 
-- object keys are sorted lexicographically as strings (byte-wise by UTF-16
-  code unit; numeric-looking keys such as `"10"` and `"2"` sort as strings,
-  so `"10"` precedes `"2"` — cross-language implementations must match this)
+- object keys are sorted lexicographically by UTF-16 code unit order,
+  matching JavaScript's default string sort (NOT by UTF-8 bytes; the two
+  differ for some non-BMP characters). Numeric-looking keys such as `"10"`
+  and `"2"` sort as strings, so `"10"` precedes `"2"` — cross-language
+  implementations must match this
 - arrays preserve order
 - strings and booleans use normal JSON encoding
-- numbers must be finite JSON numbers
+- numbers must be finite JSON numbers, serialized exactly as ECMAScript
+  `JSON.stringify` output: `1.0` serializes as `1`, `-0` as `0`, and very
+  large magnitudes use exponent notation such as `1e+21`. Languages differ
+  here (for example Python renders `1.0` as `1.0`), so for maximum
+  cross-language safety, protocol-bound contexts should prefer strings,
+  booleans, integers, and null, and avoid non-integer numbers
 - `null` is allowed
 - object fields with `undefined` values are omitted
 - unsupported values such as functions, symbols, and bigints are rejected
@@ -219,6 +227,11 @@ Implementations should reject:
 - unsupported `algorithm` values
 - malformed base64url roots
 - contexts that cannot be canonicalized
+
+Verifier APIs should also handle invalid verifier-supplied options without
+throwing: a non-array `allowedEpochs` and a `requiredContext` that cannot
+be canonicalized both produce a verification failure result in the
+reference implementation.
 
 The reference implementation's default maximum depth is `5,000,000`, but
 applications should set a lower `maxDepth` for interactive or unauthenticated
