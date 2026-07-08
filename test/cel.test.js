@@ -136,6 +136,34 @@ test("default maxDepth applies when unset", () => {
   assert.match(result.error, /exceeds maxDepth/);
 });
 
+test("non-array allowedEpochs is rejected, not substring-matched", () => {
+  // A string here would use String.prototype.includes: allowedEpochs "e1x"
+  // must NOT accept epoch "e1".
+  const receipt = createReceipt({ depth: 50, epoch: "e1", context: CTX });
+  for (const bad of ["e1x", "e1", {}, 42]) {
+    const result = verifyReceipt(receipt, { maxDepth: 50, allowedEpochs: bad });
+    assert.equal(result.ok, false, `allowedEpochs=${JSON.stringify(bad)} should fail`);
+    assert.match(result.error, /must be an array/);
+  }
+});
+
+test("deriveEpoch rejects non-finite nowMs", () => {
+  for (const bad of [NaN, Infinity, "123", null]) {
+    assert.throws(() => deriveEpoch({ windowSeconds: 300, nowMs: bad }), RangeError);
+  }
+});
+
+test("createChallenge validates its inputs early", () => {
+  assert.throws(() => createChallenge({ depth: 10, action: undefined }), TypeError);
+  assert.throws(() => createChallenge({ depth: 10, action: "" }), TypeError);
+  assert.throws(() => createChallenge({ depth: 10, action: "a", resource: 42 }), TypeError);
+  assert.throws(() => createChallenge({ depth: 10, action: "a", extra: [1] }), TypeError);
+  assert.throws(() => createChallenge({ depth: 10, action: "a", extra: { n: 1n } }), TypeError);
+  assert.throws(() => createChallenge({ depth: 10, action: "a", extra: { pad: "x".repeat(5000) } }), RangeError);
+  const ch = createChallenge({ depth: 10, action: "a" });
+  assert.equal("resource" in ch.context, false); // omitted, not undefined
+});
+
 test("requiredEpoch and allowedEpochs", () => {
   const receipt = createReceipt({ depth: 50, epoch: "e1", context: CTX });
   assert.equal(verifyReceipt(receipt, { maxDepth: 50, requiredEpoch: "e1" }).ok, true);

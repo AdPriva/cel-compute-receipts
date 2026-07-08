@@ -120,6 +120,10 @@ The final receipt root is:
 base64url(s_depth)
 ```
 
+The root encoding is unpadded base64url (RFC 4648 §5, no `=` padding). A
+sha256 root is exactly 43 characters and a sha512 root is exactly 86
+characters. Verifiers reject padded or otherwise non-conforming roots.
+
 The reference implementation currently supports `sha256` and `sha512`, using
 Node.js `crypto.createHash(algorithm)`.
 

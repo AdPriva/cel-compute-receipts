@@ -265,8 +265,15 @@ export function verifyReceipt(receipt, opts = {}) {
   if (requiredEpoch !== undefined && receipt.epoch !== requiredEpoch) {
     return { ok: false, error: "epoch mismatch" };
   }
-  if (allowedEpochs !== undefined && !allowedEpochs.includes(receipt.epoch)) {
-    return { ok: false, error: "epoch not in allowed set" };
+  if (allowedEpochs !== undefined) {
+    // Must be a real array: a string here would silently do substring
+    // matching via String.prototype.includes and accept wrong epochs.
+    if (!Array.isArray(allowedEpochs)) {
+      return { ok: false, error: "allowedEpochs must be an array" };
+    }
+    if (!allowedEpochs.includes(receipt.epoch)) {
+      return { ok: false, error: "epoch not in allowed set" };
+    }
   }
   if (typeof receipt.root !== "string" || receipt.root.length === 0) {
     return { ok: false, error: "root must be a non-empty base64url string" };
@@ -329,6 +336,9 @@ export function deriveEpoch({ windowSeconds = 300, nowMs = Date.now() } = {}) {
   if (!Number.isInteger(windowSeconds) || windowSeconds < 1) {
     throw new RangeError("windowSeconds must be a positive integer");
   }
+  if (typeof nowMs !== "number" || !Number.isFinite(nowMs)) {
+    throw new RangeError("nowMs must be a finite number");
+  }
   const windowNumber = Math.floor(nowMs / 1000 / windowSeconds);
   return `cel:${windowSeconds}:${windowNumber}`;
 }
@@ -356,11 +366,26 @@ export function createChallenge({
 }) {
   checkAlgorithm(algorithm);
   checkDepth(depth);
+  if (typeof action !== "string" || action.length === 0) {
+    throw new TypeError("action must be a non-empty string");
+  }
+  if (resource !== undefined && typeof resource !== "string") {
+    throw new TypeError("resource must be a string when provided");
+  }
+  if (extra === null || typeof extra !== "object" || Array.isArray(extra)) {
+    throw new TypeError("extra must be a plain object");
+  }
+  const context = resource === undefined
+    ? { action, ...extra }
+    : { action, resource, ...extra };
+  // Fail here, at challenge creation, rather than later at createReceipt():
+  // an uncanonicalizable or oversized context makes the challenge unusable.
+  checkContextSize(canonicalize(context));
   return {
     version: VERSION,
     algorithm,
     depth,
     epoch: deriveEpoch({ windowSeconds }),
-    context: { action, resource, ...extra }
+    context
   };
 }
