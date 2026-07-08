@@ -6,7 +6,7 @@
   "sideEffects": false,
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/adpriva/cel-compute-receipts.git"
+    "url": "git+https://github.com/AdPriva/cel-compute-receipts.git"
   },
   "bugs": {
     "url": "https://github.com/adpriva/cel-compute-receipts/issues"
@@ -15,8 +15,7 @@
   "files": [
     "src/",
     "examples/",
-    "docs/protocol.md",
-    "docs/threat-model.md",
+    "docs/",
     "README.md",
     "LICENSE",
     "SECURITY.md",
@@ -40,7 +39,7 @@
     "test": "node --test",
     "bench": "node src/cli.js bench",
     "pack:check": "npm pack --dry-run",
-    "prepublishOnly": "npm test"
+    "prepublishOnly": "npm test && npm run pack:check"
   },
   "engines": {
     "node": ">=18"
