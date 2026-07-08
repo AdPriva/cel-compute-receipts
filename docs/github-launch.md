@@ -9,12 +9,12 @@ easy to evaluate, and honest about its experimental status.
 Recommended repository name:
 
 ```text
-computational-effort-layer
+cel-compute-receipts
 ```
 
 Other good options:
 
-- `cel-compute-receipts`
+- `computational-effort-layer`
 - `compute-receipts`
 - `cel-protocol`
 
@@ -60,7 +60,7 @@ Suggested topics:
 - [ ] Create a pull request template that reminds contributors to run tests and
   update docs.
 
-### Package Publishing
+### Optional npm Package Publishing
 
 - [ ] Decide whether the npm package should be `cel-compute-receipts` or a
   scoped package such as `@adpriva/cel`.
@@ -117,10 +117,14 @@ Release notes:
 Initial experimental release of CEL.
 
 - dependency-free Node.js reference implementation
+- standalone browser/WebCrypto implementation
 - command-line receipt generation and verification
 - direct verification mode
+- pinned protocol test vector
 - HTTP agent-gateway example
-- protocol notes, threat model, and security policy
+- browser demo
+- GitHub Actions CI across Node 18, 20, and 22
+- protocol notes, threat model, research review, and security policy
 - full paper included under docs/
 ```
 
@@ -160,7 +164,7 @@ alternative for cost-based throttling" only when the distinction is clear.
 Low-barrier issues:
 
 - Add mobile and low-power device benchmark results.
-- Add a browser/WebCrypto receipt generation example.
+- Add more browser demo polish and mobile benchmark results.
 - Add a comparison document for Hashcash, client puzzles, VDFs, and CEL.
 - Add more deployment examples.
 - Add an FAQ from launch feedback.
@@ -211,7 +215,7 @@ Run these locally before tagging:
 ```bash
 npm test
 npm run bench
-npm pack --dry-run
+npm run pack:check
 git status --short
 ```
 
