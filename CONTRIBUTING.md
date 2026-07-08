@@ -18,6 +18,7 @@ Set up the project:
 ```bash
 npm install
 npm test
+npm run bench
 ```
 
 `npm test` currently runs the Node.js unit test suite. This project does not
@@ -29,7 +30,7 @@ yet enforce a separate linter, formatter, or type checker.
 - Benchmark CEL on different devices
 - Improve browser support
 - Document threat models
-- Implement alternative policy modules
+- Prototype alternative policy modules
 - Add replay-resistant challenge examples
 - Compare CEL with Hashcash, client puzzles, and VDFs
 
