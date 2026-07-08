@@ -50,7 +50,9 @@ Unknown versions and algorithms must be rejected.
 
 The policy and non-string contexts are serialized with deterministic JSON:
 
-- object keys are sorted lexicographically
+- object keys are sorted lexicographically as strings (byte-wise by UTF-16
+  code unit; numeric-looking keys such as `"10"` and `"2"` sort as strings,
+  so `"10"` precedes `"2"` — cross-language implementations must match this)
 - arrays preserve order
 - strings and booleans use normal JSON encoding
 - numbers must be finite JSON numbers

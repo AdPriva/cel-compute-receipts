@@ -131,8 +131,13 @@ function deriveSeed({ algorithm, depth, epoch, ctxInput }) {
  */
 function assemble(algorithm, seed, depth) {
   let s = seed;
+  // One index buffer reused across the hot loop; hash() consumes the bytes
+  // synchronously, so in-place overwriting is safe and avoids allocating
+  // `depth` throwaway 8-byte buffers during verification.
+  const indexBuffer = Buffer.alloc(8);
   for (let i = 1; i <= depth; i++) {
-    const e = hash(algorithm, s, uint64be(i));
+    indexBuffer.writeBigUInt64BE(BigInt(i));
+    const e = hash(algorithm, s, indexBuffer);
     s = hash(algorithm, s, e);
   }
   return s;
@@ -287,12 +292,12 @@ export function verifyReceipt(receipt, opts = {}) {
     }
   }
 
-  let claimed;
-  try {
-    claimed = Buffer.from(receipt.root, "base64url");
-  } catch {
+  // Buffer.from silently skips invalid characters instead of throwing, so
+  // strict base64url validation must happen on the string itself.
+  if (!/^[A-Za-z0-9_-]+$/.test(receipt.root)) {
     return { ok: false, error: "root is not valid base64url" };
   }
+  const claimed = Buffer.from(receipt.root, "base64url");
   if (claimed.length !== ALGORITHMS[receipt.algorithm]) {
     return { ok: false, error: "root has wrong length for algorithm" };
   }
