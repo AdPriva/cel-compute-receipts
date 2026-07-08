@@ -14,9 +14,12 @@
   "homepage": "https://github.com/adpriva/cel-compute-receipts#readme",
   "files": [
     "src/",
+    "examples/",
+    "docs/*.md",
     "README.md",
     "LICENSE",
-    "SECURITY.md"
+    "SECURITY.md",
+    "CONTRIBUTING.md"
   ],
   "main": "src/cel.js",
   "exports": {
@@ -31,6 +34,7 @@
   "scripts": {
     "test": "node --test",
     "bench": "node src/cli.js bench",
+    "pack:check": "npm pack --dry-run",
     "prepublishOnly": "npm test"
   },
   "engines": {
