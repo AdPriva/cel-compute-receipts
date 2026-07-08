@@ -22,7 +22,8 @@
  *   node examples/agent-gateway.js --client "hello from an agent"
  *
  * Configuration via environment variables:
- *   CEL_GATEWAY_PORT, CEL_REQUIRED_DEPTH, CEL_MAX_DEPTH, CEL_WINDOW_SECONDS
+ *   CEL_GATEWAY_PORT, CEL_REQUIRED_DEPTH, CEL_MAX_DEPTH,
+ *   CEL_WINDOW_SECONDS, CEL_AUDIENCE
  *
  * Production notes (see docs/threat-model.md):
  *   - keep MAX_DEPTH low: direct verification costs the server CPU
@@ -164,6 +165,13 @@ function startServer() {
       return;
     }
 
+    // Reject obviously non-base64 content early; Buffer.from is lenient and
+    // would silently ignore invalid chars, producing a wrong parse result.
+    if (!/^[A-Za-z0-9+/]*={0,2}$/.test(header)) {
+      res.writeHead(400).end("malformed receipt\n");
+      return;
+    }
+
     let receipt;
     try {
       receipt = JSON.parse(Buffer.from(header, "base64").toString("utf8"));
@@ -217,6 +225,9 @@ function startServer() {
       return;
     }
 
+    // The receipt is consumed here. If the body later fails size checks, the
+    // receipt is still spent — by design: this is admission control, not a
+    // transactional commit. Clients must re-challenge on a 413.
     consumeNonce(ctx.nonce);
     markSeen(receipt.root);
 
