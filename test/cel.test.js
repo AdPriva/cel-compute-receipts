@@ -156,6 +156,26 @@ test("requiredContext binding", () => {
   );
 });
 
+test("requiredContext is a strict whole-context match, not partial", () => {
+  // A subset context must NOT match: if it did, a receipt bound to one
+  // resource could satisfy a verifier that only names the action.
+  const receipt = createReceipt({ depth: 50, epoch: "e", context: CTX });
+  assert.equal(
+    verifyReceipt(receipt, { maxDepth: 50, requiredContext: { action: "comment.create" } }).ok,
+    false
+  );
+});
+
+test("__proto__ in parsed JSON contexts is treated as a plain key", () => {
+  // JSON.parse creates an own "__proto__" property (no setter fired);
+  // canonicalize serializes it like any other key, and the roundtrip
+  // verifies without polluting Object.prototype.
+  const payload = JSON.parse('{"__proto__":{"polluted":true},"a":1}');
+  const receipt = createReceipt({ depth: 10, epoch: "e", context: payload });
+  assert.equal(verifyReceipt(receipt, { maxDepth: 10 }).ok, true);
+  assert.equal({}.polluted, undefined);
+});
+
 /* ------------------------------------------------------------------ */
 /* Malformed input rejection                                           */
 /* ------------------------------------------------------------------ */
@@ -211,6 +231,15 @@ test("createReceipt validates inputs", () => {
   assert.throws(() => createReceipt({ depth: 10, epoch: "", context: {} }), TypeError);
 });
 
+test("unsafe integer depths are rejected on both sides", () => {
+  // Beyond MAX_SAFE_INTEGER, depth loses precision and could trap the
+  // verifier in an effectively unbounded loop; both sides refuse early.
+  const unsafe = Number.MAX_SAFE_INTEGER + 1;
+  assert.throws(() => createReceipt({ depth: unsafe, epoch: "e", context: {} }), RangeError);
+  const receipt = createReceipt({ depth: 10, epoch: "e", context: CTX });
+  assert.equal(verifyReceipt({ ...receipt, depth: unsafe }, { maxDepth: unsafe }).ok, false);
+});
+
 /* ------------------------------------------------------------------ */
 /* Epochs and challenges                                               */
 /* ------------------------------------------------------------------ */
@@ -220,6 +249,15 @@ test("deriveEpoch format and currentEpochs adjacency", () => {
   assert.equal(e, `cel:300:${Math.floor(1_700_000_000 / 300)}`);
   const [cur, prev] = currentEpochs({ windowSeconds: 300, nowMs: 1_700_000_000_000 });
   assert.equal(Number(cur.split(":")[2]) - Number(prev.split(":")[2]), 1);
+});
+
+test("deriveEpoch window boundaries are exact", () => {
+  const windowMs = 300 * 1000;
+  const endOfFirst = deriveEpoch({ windowSeconds: 300, nowMs: windowMs - 1 });
+  const startOfSecond = deriveEpoch({ windowSeconds: 300, nowMs: windowMs });
+  assert.notEqual(endOfFirst, startOfSecond);
+  assert.equal(endOfFirst, "cel:300:0");
+  assert.equal(startOfSecond, "cel:300:1");
 });
 
 test("createChallenge produces provable challenge", () => {
