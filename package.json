@@ -15,7 +15,8 @@
   "files": [
     "src/",
     "examples/",
-    "docs/*.md",
+    "docs/protocol.md",
+    "docs/threat-model.md",
     "README.md",
     "LICENSE",
     "SECURITY.md",
