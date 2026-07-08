@@ -20,3 +20,6 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm test
+      # Catch package-contents mistakes (files field regressions) early.
+      - run: npm run pack:check
+        if: matrix.node == 22
