@@ -7,7 +7,7 @@
 <!--
   Serve this from the repo root (ES modules do not load over file://):
 
-    npx serve .          # or: python3 -m http.server 8000
+    npx serve . -l 8000   # or: python3 -m http.server 8000
 
   then open http://localhost:8000/examples/browser-demo.html
 -->
@@ -32,7 +32,7 @@ verifies it. Everything runs locally.</p>
 <label for="depth">Sequential depth (higher = more work)</label>
 <select id="depth">
   <option value="2000">2,000 (fast)</option>
-  <option value="10000" selected>10,000 (~1s in most browsers)</option>
+  <option value="10000" selected>10,000 (moderate)</option>
   <option value="50000">50,000 (noticeable)</option>
 </select>
 
@@ -64,7 +64,11 @@ verifies it. Everything runs locally.</p>
         JSON.stringify(receipt, null, 2) + "\n\nverifying...";
 
       const t0 = performance.now();
-      const result = await verifyReceipt(receipt, { maxDepth: depth, requiredEpoch: epoch });
+      const result = await verifyReceipt(receipt, {
+        maxDepth: depth,
+        requiredEpoch: epoch,
+        requiredContext: context
+      });
       const verifyMs = (performance.now() - t0).toFixed(1);
 
       // tamper demo: flip the context and watch verification fail
