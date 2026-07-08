@@ -67,11 +67,35 @@ function requireInt(args, name) {
     process.exit(2);
   }
   const v = Number(args[name]);
-  if (!Number.isInteger(v)) {
-    console.error(`error: --${name} must be an integer`);
+  if (!Number.isSafeInteger(v) || v < 1) {
+    console.error(`error: --${name} must be a positive integer`);
     process.exit(2);
   }
   return v;
+}
+
+/**
+ * Per-command flag whitelist. Unknown flags are rejected rather than
+ * ignored: a typo like --contex would otherwise silently prove against
+ * the default {} context, burning compute on a useless receipt.
+ */
+const COMMAND_FLAGS = {
+  epoch: ["window-seconds"],
+  challenge: ["depth", "action", "resource", "window-seconds"],
+  prove: ["depth", "epoch", "context", "algorithm", "output"],
+  verify: ["receipt", "max-depth", "epoch", "window-seconds", "context", "action", "resource"],
+  bench: ["depth"]
+};
+
+function validateFlags(command, args) {
+  const allowed = new Set([...(COMMAND_FLAGS[command] ?? []), "help", "version"]);
+  for (const key of Object.keys(args)) {
+    if (!allowed.has(key)) {
+      console.error(`error: unknown flag --${key} for '${command}'`);
+      console.error(`allowed flags: ${(COMMAND_FLAGS[command] ?? []).map((f) => "--" + f).join(", ") || "(none)"}`);
+      process.exit(2);
+    }
+  }
 }
 
 function usage() {
@@ -116,6 +140,11 @@ if (command === "help" || command === "--help" || command === "-h" || args.help 
   process.exit(0);
 }
 
+if (Object.hasOwn(COMMAND_FLAGS, command ?? "")) {
+  validateFlags(command, args);
+}
+
+try {
 switch (command) {
   case "epoch": {
     const windowSeconds = args["window-seconds"] ? requireInt(args, "window-seconds") : 300;
@@ -178,6 +207,10 @@ switch (command) {
       console.error(`error: could not read ${args.receipt}: ${err.message}`);
       process.exit(2);
     }
+    if (typeof args.epoch === "string" && args["window-seconds"] !== undefined) {
+      console.error("error: use either --epoch or --window-seconds, not both");
+      process.exit(2);
+    }
     const opts = { maxDepth };
     if (typeof args.epoch === "string") {
       opts.requiredEpoch = args.epoch;
@@ -224,4 +257,10 @@ switch (command) {
   default:
     usage();
     process.exit(command ? 2 : 0);
+}
+} catch (err) {
+  // User-input errors from the core API (oversized epoch/context, bad
+  // window values, ...) surface as friendly messages, not stack traces.
+  console.error(`error: ${err.message}`);
+  process.exit(2);
 }
