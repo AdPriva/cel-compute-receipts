@@ -27,9 +27,9 @@ yet enforce a separate linter, formatter, or type checker.
 
 - Add deployment examples
 - Benchmark CEL on different devices
-- Improve browser support
+- Improve browser demos and mobile benchmarks
 - Document threat models
-- Implement alternative policy modules
+- Prototype alternative policy modules
 - Add replay-resistant challenge examples
 - Compare CEL with Hashcash, client puzzles, and VDFs
 
@@ -66,7 +66,7 @@ affected, plus any relevant references.
 3. Keep the change focused.
 4. Add or update tests for behavior changes.
 5. Update README, examples, or docs when public behavior changes.
-6. Run `npm test` before submitting.
+6. Run `npm test` and `npm run pack:check` before submitting.
 7. Use clear commit messages. Conventional Commits are welcome, for example
    `feat: add browser receipt generation` or `fix: reject stale epochs`.
 
