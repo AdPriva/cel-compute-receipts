@@ -201,6 +201,23 @@ more expensive without requiring a human challenge.
 See [examples/agent-gateway.js](./examples/agent-gateway.js) for a minimal HTTP
 gateway.
 
+## Browser Support
+
+`src/cel-browser.js` is a standalone WebCrypto implementation of the same
+protocol — no Node APIs, no dependencies, importable directly by a browser.
+The test suite asserts it produces byte-identical roots to the Node
+implementation, including the pinned interop vector.
+
+```js
+import { createReceipt, verifyReceipt } from "cel-compute-receipts/browser";
+
+const receipt = await createReceipt({ depth: 10000, epoch, context });
+const result = await verifyReceipt(receipt, { maxDepth: 10000 });
+```
+
+Try it interactively: serve the repo (`npx serve .`) and open
+[examples/browser-demo.html](./examples/browser-demo.html).
+
 ## Security Considerations
 
 - CEL is a compute-pricing primitive, not an identity or trust primitive.
@@ -208,7 +225,9 @@ gateway.
 - Verifiers must enforce maximum depth before recomputing a receipt.
 - Receipts should be bound to action, resource, method, audience, and epoch.
 - Short epochs or server-issued challenges help reduce replay.
-- Browser support is not implemented yet; this version uses Node.js `crypto`.
+- The browser implementation proves more slowly than Node (each hash is an
+  awaited WebCrypto call); use interactive depths there and see the roadmap
+  for WASM.
 
 See [SECURITY.md](./SECURITY.md) and [docs/threat-model.md](./docs/threat-model.md)
 for more deployment guidance.
@@ -233,7 +252,8 @@ npm run bench
 
 ## Repository Layout
 
-- [src/cel.js](./src/cel.js) - core CEL implementation
+- [src/cel.js](./src/cel.js) - core CEL implementation (Node)
+- [src/cel-browser.js](./src/cel-browser.js) - WebCrypto implementation (browser)
 - [src/cli.js](./src/cli.js) - command-line tool
 - [test/cel.test.js](./test/cel.test.js) - unit tests
 - [docs/CEL-paper.pdf](https://github.com/adpriva/cel-compute-receipts/blob/main/docs/CEL-paper.pdf) - full paper (GitHub only, not in the npm package)
@@ -242,6 +262,7 @@ npm run bench
 - [docs/research-review.md](https://github.com/adpriva/cel-compute-receipts/blob/main/docs/research-review.md) - positioning and critique (GitHub only)
 - [docs/github-launch.md](https://github.com/adpriva/cel-compute-receipts/blob/main/docs/github-launch.md) - launch checklist (GitHub only)
 - [examples/agent-gateway.js](./examples/agent-gateway.js) - HTTP example
+- [examples/browser-demo.html](./examples/browser-demo.html) - in-browser demo
 
 ## Development
 
@@ -266,7 +287,6 @@ or type checker.
 
 Near-term:
 
-- Browser/WebCrypto implementation
 - adaptive difficulty policy examples
 - replay-resistant challenge examples
 - benchmark table across phones, laptops, and servers

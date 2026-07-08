@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CEL browser demo — compute receipts</title>
+<!--
+  Serve this from the repo root (ES modules do not load over file://):
+
+    npx serve .          # or: python3 -m http.server 8000
+
+  then open http://localhost:8000/examples/browser-demo.html
+-->
+<style>
+  body { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; max-width: 720px;
+         margin: 2rem auto; padding: 0 1rem; line-height: 1.5; color: #222; }
+  h1 { font-size: 1.3rem; }
+  label { display: block; margin: 0.8rem 0 0.2rem; }
+  input, select { font: inherit; padding: 0.3rem; width: 100%; box-sizing: border-box; }
+  button { font: inherit; padding: 0.5rem 1.2rem; margin-top: 1rem; cursor: pointer; }
+  pre { background: #f6f6f6; padding: 1rem; overflow-x: auto; white-space: pre-wrap;
+        word-break: break-all; border-radius: 4px; }
+  .ok { color: #05620d; } .bad { color: #a11212; } .muted { color: #777; }
+</style>
+</head>
+<body>
+<h1>CEL — pay compute for an action</h1>
+<p class="muted">CAPTCHAs ask "are you human?" CEL asks "did this action pay
+compute?" This page proves a receipt in your browser with WebCrypto, then
+verifies it. Everything runs locally.</p>
+
+<label for="depth">Sequential depth (higher = more work)</label>
+<select id="depth">
+  <option value="2000">2,000 (fast)</option>
+  <option value="10000" selected>10,000 (~1s in most browsers)</option>
+  <option value="50000">50,000 (noticeable)</option>
+</select>
+
+<label for="action">Action to bind the receipt to</label>
+<input id="action" value="comment.create">
+
+<button id="go">Prove &amp; verify</button>
+
+<pre id="out" class="muted">receipt will appear here</pre>
+
+<script type="module">
+  import { createReceipt, verifyReceipt, deriveEpoch }
+    from "../src/cel-browser.js";
+
+  const out = document.getElementById("out");
+  const button = document.getElementById("go");
+
+  button.addEventListener("click", async () => {
+    button.disabled = true;
+    out.className = "muted";
+    out.textContent = "proving...";
+    try {
+      const depth = Number(document.getElementById("depth").value);
+      const context = { action: document.getElementById("action").value || "demo" };
+      const epoch = deriveEpoch({ windowSeconds: 300 });
+
+      const receipt = await createReceipt({ depth, epoch, context });
+      out.textContent = `proved in ${receipt.elapsedMs} ms\n\n` +
+        JSON.stringify(receipt, null, 2) + "\n\nverifying...";
+
+      const t0 = performance.now();
+      const result = await verifyReceipt(receipt, { maxDepth: depth, requiredEpoch: epoch });
+      const verifyMs = (performance.now() - t0).toFixed(1);
+
+      // tamper demo: flip the context and watch verification fail
+      const tampered = await verifyReceipt(
+        { ...receipt, context: { action: "something.else" } },
+        { maxDepth: depth }
+      );
+
+      out.className = result.ok ? "ok" : "bad";
+      out.textContent =
+        `proved in ${receipt.elapsedMs} ms\n` +
+        `verified: ${result.ok} (${verifyMs} ms)\n` +
+        `tampered context verifies: ${tampered.ok} (${tampered.error ?? "no error"})\n\n` +
+        JSON.stringify(receipt, null, 2);
+    } catch (err) {
+      out.className = "bad";
+      out.textContent = "error: " + err.message;
+    } finally {
+      button.disabled = false;
+    }
+  });
+</script>
+</body>
+</html>
