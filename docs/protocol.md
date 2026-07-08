@@ -135,9 +135,19 @@ The verifier:
 2. Rejects unsupported `version` or `algorithm` values.
 3. Rejects invalid `depth`, empty `epoch`, or empty `root`.
 4. Rejects immediately if `depth > maxDepth`.
-5. Recomputes the assembly using the receipt fields.
-6. Decodes `root` from base64url.
-7. Compares the decoded root to the recomputed root.
+5. Enforces application context policy: any required context fields (such
+   as `action`, `resource`, `method`, `audience`, or a challenge nonce)
+   must match the verifier's expectations for the target endpoint. Field
+   checks happen before recomputation because they are cheap.
+6. Validates that `root` matches the strict character set `^[A-Za-z0-9_-]+$`
+   before decoding. This check is mandatory: some runtimes (including
+   Node.js `Buffer.from(root, "base64url")`) silently skip invalid
+   characters instead of failing, which would otherwise turn malformed
+   input into a silently truncated buffer.
+7. Decodes `root` from base64url and rejects lengths that do not match the
+   algorithm's digest size.
+8. Recomputes the assembly using the receipt fields.
+9. Compares the decoded root to the recomputed root in constant time.
 
 The reference implementation uses Node.js `crypto.timingSafeEqual` after
 checking that both buffers have equal length. Mode A verification is
@@ -180,6 +190,21 @@ across actions. For example:
 
 An empty object is valid but usually unsafe because it does not bind the receipt
 to a meaningful action.
+
+## Size Constraints
+
+The reference implementation enforces these limits on both proving and
+verification, rejecting oversized values before any hashing:
+
+| Field | Maximum |
+| --- | --- |
+| canonical context | 4096 bytes (UTF-8) |
+| epoch | 256 bytes (UTF-8) |
+
+These bounds guard verifiers against memory exhaustion and oversized-input
+DoS. Independent implementations should enforce the same limits for
+interoperability: a receipt that proves on one side must not be rejected as
+oversized on the other.
 
 ## Error Conditions
 
