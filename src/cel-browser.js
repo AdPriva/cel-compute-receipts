@@ -2,10 +2,9 @@
  * CEL - Computational Effort Layer, WebCrypto implementation.
  *
  * Same protocol as src/cel.js (see docs/protocol.md), built on the Web
- * Crypto API instead of node:crypto, with zero Node-specific APIs. It runs
- * in browsers and in Node.js >= 18 (which ships WebCrypto as globalThis
- * .crypto). The test suite asserts both implementations produce identical
- * roots, including the pinned interop vector.
+ * Crypto API instead of node:crypto. It runs in browsers and in Node.js >= 18.
+ * The test suite asserts both implementations produce identical roots,
+ * including the pinned interop vector.
  *
  * Differences from src/cel.js:
  *   - createReceipt() and verifyReceipt() are async (crypto.subtle is
@@ -34,6 +33,7 @@ const MAX_CONTEXT_BYTES = 4096;
 const MAX_EPOCH_BYTES = 256;
 
 const encoder = new TextEncoder();
+let nodeSubtlePromise;
 
 /* ------------------------------------------------------------------ */
 /* Encoding helpers                                                    */
@@ -52,8 +52,18 @@ function concat(...arrays) {
 }
 
 async function hash(algorithm, ...arrays) {
-  const digest = await crypto.subtle.digest(ALGORITHMS[algorithm].subtle, concat(...arrays));
+  const subtle = await getSubtle();
+  const digest = await subtle.digest(ALGORITHMS[algorithm].subtle, concat(...arrays));
   return new Uint8Array(digest);
+}
+
+async function getSubtle() {
+  if (globalThis.crypto?.subtle) return globalThis.crypto.subtle;
+  if (typeof process !== "undefined" && process.versions?.node) {
+    nodeSubtlePromise ??= import("node:crypto").then(({ webcrypto }) => webcrypto.subtle);
+    return nodeSubtlePromise;
+  }
+  throw new ReferenceError("WebCrypto API is not available in this runtime");
 }
 
 function uint64be(n) {
