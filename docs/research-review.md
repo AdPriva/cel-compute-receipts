@@ -3,7 +3,10 @@
 ## Summary Assessment
 
 As an open-source abuse-throttling primitive, CEL is a strong fit: the scope
-is honest and the primitive is simple to reason about.
+is honest and the primitive is simple to reason about. CEL is strong as an
+abuse-throttling primitive because it is simple, privacy-preserving, easy to
+deploy locally, and explicit about cost. It loses points for verifier CPU cost
+and hardware asymmetry.
 
 As a complete CAPTCHA replacement, it is not one and should not be positioned
 as one; it replaces CAPTCHAs only where the real goal is throttling.
@@ -29,7 +32,9 @@ low-trust traffic.
 
 Direct verification costs the verifier about as much work as the prover. That
 is the biggest practical weakness. It is fine for small depths and controlled
-systems, but dangerous as a public unauthenticated hot path.
+systems, but dangerous as a public unauthenticated hot path. Deployments must
+never trust the receipt's declared `depth` alone; servers must enforce
+route-specific minimum depth and strict `maxDepth`.
 
 The cryptographic paper should be careful with novelty claims. The construction
 is close to iterated hash-chain work and client-puzzle literature. The framing
@@ -69,3 +74,4 @@ Better:
 - design a verifier-safe deployment profile
 - prototype succinct verification separately
 - rewrite the proof around a more precise sequential-work assumption
+- compare directly against Hashcash, client puzzles, PoSW, VDFs, and Anubis/mCaptcha-style anti-bot systems
