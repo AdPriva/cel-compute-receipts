@@ -1,4 +1,4 @@
-# CEL v0 Protocol Notes
+# CEL v0 Protocol Specification
 
 CEL v0 creates a receipt by running a sequential hash assembly for a specific
 policy, epoch, and context. This document describes the byte-level behavior of
@@ -43,7 +43,9 @@ Required verification fields:
 - `root`: base64url-encoded final state
 
 `elapsedMs` is informational and is not verified. Unknown extra fields are not
-part of the receipt root.
+part of the receipt root and are ignored during verification. Do not put
+security-critical data only in extra fields; bind it through `context`,
+`epoch`, or policy.
 
 Unknown versions and algorithms must be rejected.
 
@@ -69,6 +71,9 @@ The policy and non-string contexts are serialized with deterministic JSON:
 - unsupported values such as functions, symbols, and bigints are rejected
 - JavaScript `Date` values are serialized to ISO 8601 strings by the reference
   implementation
+
+Only plain JSON-like objects should be used. Symbol-keyed properties and
+prototype state are not part of the canonical form.
 
 For portability, protocol users should prefer plain JSON values and avoid
 language-specific values such as JavaScript `Date`.
@@ -143,19 +148,21 @@ The verifier:
 2. Rejects unsupported `version` or `algorithm` values.
 3. Rejects invalid `depth`, empty `epoch`, or empty `root`.
 4. Rejects immediately if `depth > maxDepth`.
-5. Enforces application context policy: any required context fields (such
+5. Rejects receipts whose `epoch` is not in the verifier's allowed epoch set or
+   challenge store.
+6. Enforces application context policy: any required context fields (such
    as `action`, `resource`, `method`, `audience`, or a challenge nonce)
    must match the verifier's expectations for the target endpoint. Field
    checks happen before recomputation because they are cheap.
-6. Validates that `root` matches the strict character set `^[A-Za-z0-9_-]+$`
+7. Validates that `root` matches the strict character set `^[A-Za-z0-9_-]+$`
    before decoding. This check is mandatory: some runtimes (including
    Node.js `Buffer.from(root, "base64url")`) silently skip invalid
    characters instead of failing, which would otherwise turn malformed
    input into a silently truncated buffer.
-7. Decodes `root` from base64url and rejects lengths that do not match the
+8. Decodes `root` from base64url and rejects lengths that do not match the
    algorithm's digest size.
-8. Recomputes the assembly using the receipt fields.
-9. Compares the decoded root to the recomputed root in constant time.
+9. Recomputes the assembly using the receipt fields.
+10. Compares the decoded root to the recomputed root in constant time.
 
 The reference implementation uses Node.js `crypto.timingSafeEqual` after
 checking that both buffers have equal length. Mode A verification is
