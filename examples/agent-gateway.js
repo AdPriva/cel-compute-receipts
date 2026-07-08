@@ -8,9 +8,12 @@
  *   2. The agent performs the work, producing a receipt bound to that
  *      challenge, and retries with the receipt in a header.
  *   3. The gateway verifies cheaply first (size, depth, context fields,
- *      replay cache), then runs the expensive chain recomputation.
- *   4. A replayed receipt is rejected with 409: the nonce makes every
- *      receipt unique, and verified roots are cached for two epoch windows.
+ *      issued-nonce check, replay cache), then runs the expensive chain
+ *      recomputation.
+ *   4. Nonces are server-issued and single-use: a self-minted nonce is
+ *      rejected with 403, and a replayed receipt fails because its nonce
+ *      was consumed on first use (verified roots are also cached as
+ *      defense in depth).
  *
  * Run the server:
  *   node examples/agent-gateway.js
@@ -24,9 +27,8 @@
  * Production notes (see docs/threat-model.md):
  *   - keep MAX_DEPTH low: direct verification costs the server CPU
  *   - put ordinary rate limits and body-size limits in front of this
- *   - the replay cache here is in-process memory; multi-instance deployments
- *     need a shared TTL store (e.g. Redis) or a Bloom filter per window
- *   - a stricter deployment would also track which nonces it actually issued
+ *   - the nonce store and replay cache are in-process memory; multi-instance
+ *     deployments need a shared TTL store (e.g. Redis)
  *   - receipts travel in an HTTP header here for simplicity; some proxies cap
  *     header sizes (~8 KB), so large-context deployments should move the
  *     receipt into the request body
@@ -43,40 +45,76 @@ import {
   currentEpochs
 } from "../src/cel.js";
 
-const PORT = Number(process.env.CEL_GATEWAY_PORT) || 8787;
-const REQUIRED_DEPTH = Number(process.env.CEL_REQUIRED_DEPTH) || 20000; // ~a few ms of client compute
-const MAX_DEPTH = Number(process.env.CEL_MAX_DEPTH) || 50000;           // hard verifier ceiling
-const WINDOW_SECONDS = Number(process.env.CEL_WINDOW_SECONDS) || 300;
+function readPositiveIntEnv(name, fallback) {
+  const raw = process.env[name];
+  if (raw === undefined || raw === "") return fallback;
+  const v = Number(raw);
+  if (!Number.isSafeInteger(v) || v < 1) {
+    console.error(`error: ${name}=${raw} must be a positive integer`);
+    process.exit(2);
+  }
+  return v;
+}
+
+const PORT = readPositiveIntEnv("CEL_GATEWAY_PORT", 8787);
+const REQUIRED_DEPTH = readPositiveIntEnv("CEL_REQUIRED_DEPTH", 20000); // ~a few ms of client compute
+const MAX_DEPTH = readPositiveIntEnv("CEL_MAX_DEPTH", 50000);           // hard verifier ceiling
+const WINDOW_SECONDS = readPositiveIntEnv("CEL_WINDOW_SECONDS", 300);
 const MAX_RECEIPT_BYTES = 8192;
 const MAX_BODY_BYTES = 65536;
 
+if (REQUIRED_DEPTH > MAX_DEPTH) {
+  console.error(`error: CEL_REQUIRED_DEPTH (${REQUIRED_DEPTH}) must not exceed CEL_MAX_DEPTH (${MAX_DEPTH})`);
+  process.exit(2);
+}
+
 const ACTION = "agent.message";
 const RESOURCE = "/api/agent";
+const METHOD = "POST";
+const AUDIENCE = process.env.CEL_AUDIENCE || `localhost:${PORT}`;
 
 /* ------------------------------------------------------------------ */
-/* Replay cache                                                        */
+/* Issued-nonce store and replay cache                                 */
 /*                                                                     */
-/* Receipts are deterministic, so the challenge nonce makes each one   */
-/* unique; caching verified roots for two epoch windows then gives     */
-/* strict single-use semantics without a database.                     */
+/* The server records every nonce it issues and consumes it on first   */
+/* successful verification, enforcing real challenge-response: clients */
+/* cannot skip the 402 and mint their own nonces, and a verified       */
+/* receipt cannot be replayed. The root cache is defense in depth.     */
+/* Both stores are in-process memory with a TTL of two epoch windows;  */
+/* multi-instance deployments need a shared store.                     */
 /* ------------------------------------------------------------------ */
 
-const seenRoots = new Map(); // root -> expiry timestamp (ms)
+const TTL_MS = 2 * WINDOW_SECONDS * 1000;
+const issuedNonces = new Map(); // nonce -> expiry timestamp (ms)
+const seenRoots = new Map();    // root  -> expiry timestamp (ms)
+
+function prune(map) {
+  const now = Date.now();
+  for (const [key, expiry] of map) {
+    if (expiry <= now) map.delete(key);
+  }
+}
+
+function issueNonce() {
+  prune(issuedNonces);
+  const nonce = randomUUID();
+  issuedNonces.set(nonce, Date.now() + TTL_MS);
+  return nonce;
+}
+
+/** Returns true (and consumes the nonce) only if the server issued it. */
+function consumeNonce(nonce) {
+  prune(issuedNonces);
+  return issuedNonces.delete(nonce);
+}
 
 function isReplay(root) {
-  pruneSeenRoots();
+  prune(seenRoots);
   return seenRoots.has(root);
 }
 
 function markSeen(root) {
-  seenRoots.set(root, Date.now() + 2 * WINDOW_SECONDS * 1000);
-}
-
-function pruneSeenRoots() {
-  const now = Date.now();
-  for (const [root, expiry] of seenRoots) {
-    if (expiry <= now) seenRoots.delete(root);
-  }
+  seenRoots.set(root, Date.now() + TTL_MS);
 }
 
 /* ------------------------------------------------------------------ */
@@ -87,7 +125,13 @@ function challenge() {
   return {
     depth: REQUIRED_DEPTH,
     epoch: deriveEpoch({ windowSeconds: WINDOW_SECONDS }),
-    context: { action: ACTION, resource: RESOURCE, nonce: randomUUID() }
+    context: {
+      action: ACTION,
+      resource: RESOURCE,
+      method: METHOD,
+      audience: AUDIENCE,
+      nonce: issueNonce()
+    }
   };
 }
 
@@ -112,6 +156,14 @@ function startServer() {
       return;
     }
 
+    // Declared body size check before hashing; the streaming check below
+    // still covers chunked requests that omit content-length.
+    const declaredLength = Number(req.headers["content-length"]);
+    if (Number.isFinite(declaredLength) && declaredLength > MAX_BODY_BYTES) {
+      res.writeHead(413).end("body too large\n");
+      return;
+    }
+
     let receipt;
     try {
       receipt = JSON.parse(Buffer.from(header, "base64").toString("utf8"));
@@ -129,12 +181,20 @@ function startServer() {
     }
 
     // Context field checks are string comparisons; do them before hashing.
-    // The nonce must be present so every receipt is unique. A stricter
-    // deployment would also check the nonce against a store of issued ones.
     const ctx = receipt.context;
-    if (ctx?.action !== ACTION || ctx?.resource !== RESOURCE || typeof ctx?.nonce !== "string" || ctx.nonce.length > 128) {
+    if (ctx?.action !== ACTION || ctx?.resource !== RESOURCE || ctx?.method !== METHOD ||
+        ctx?.audience !== AUDIENCE || typeof ctx?.nonce !== "string" || ctx.nonce.length > 128) {
       res.writeHead(403, { "content-type": "application/json" });
       res.end(JSON.stringify({ error: "context mismatch" }) + "\n");
+      return;
+    }
+
+    // The nonce must be one this server issued (via a 402 challenge) and
+    // not yet used. Checking membership here is cheap; it is consumed only
+    // after the expensive verification succeeds.
+    if (!issuedNonces.has(ctx.nonce)) {
+      res.writeHead(403, { "content-type": "application/json" });
+      res.end(JSON.stringify({ error: "unknown or expired nonce; request a challenge" }) + "\n");
       return;
     }
 
@@ -157,6 +217,7 @@ function startServer() {
       return;
     }
 
+    consumeNonce(ctx.nonce);
     markSeen(receipt.root);
 
     let body = "";
