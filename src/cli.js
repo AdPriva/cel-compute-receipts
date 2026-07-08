@@ -39,14 +39,33 @@ function parseArgs(argv) {
 
 function parseContext(raw) {
   if (raw === undefined) return {};
+  const trimmed = raw.trim();
+  if (trimmed.startsWith("{") || trimmed.startsWith("[") || trimmed.startsWith('"')) {
+    // Looks like intended JSON: a typo here must not silently become a
+    // string context, or the prover burns real compute on a receipt that
+    // can never verify against the intended object context.
+    try {
+      return JSON.parse(raw);
+    } catch (err) {
+      console.error(`error: --context looks like JSON but failed to parse: ${err.message}`);
+      console.error("hint: fix the JSON, or pass a plain string that does not start with {, [ or \"");
+      process.exit(2);
+    }
+  }
   try {
-    return JSON.parse(raw);
+    return JSON.parse(raw); // numbers, true/false, null
   } catch {
-    return raw; // treat as plain string context
+    return raw; // plain string context
   }
 }
 
 function requireInt(args, name) {
+  // args[name] is `true` when the flag was passed without a value;
+  // Number(true) === 1, which must not silently become a valid depth.
+  if (typeof args[name] !== "string") {
+    console.error(`error: --${name} requires an integer value`);
+    process.exit(2);
+  }
   const v = Number(args[name]);
   if (!Number.isInteger(v)) {
     console.error(`error: --${name} must be an integer`);
@@ -61,12 +80,16 @@ function usage() {
   cel challenge --depth N --action X [--resource Y] [--window-seconds 300]
   cel prove     --depth N --epoch E [--context JSON-or-string] [--algorithm sha256|sha512] [--output file.json]
   cel verify    --receipt file.json --max-depth N [--epoch E] [--window-seconds S]
+                [--context JSON-or-string] [--action X] [--resource Y]
   cel bench     [--depth 100000]
 
 notes:
   verify --epoch E           requires the receipt epoch to equal E exactly
   verify --window-seconds S  accepts the current OR previous S-second window
                              (use one or the other, not both)
+  verify --context C         requires the receipt context to match C exactly
+  verify --action/--resource require those individual context fields to match
+                             (tolerates extra fields such as a nonce)
 
 examples:
   cel epoch
@@ -162,6 +185,16 @@ switch (command) {
       opts.allowedEpochs = currentEpochs({
         windowSeconds: requireInt(args, "window-seconds")
       });
+    }
+    if (typeof args.context === "string") {
+      opts.requiredContext = parseContext(args.context);
+    }
+    // Individual field checks tolerate extra context fields (e.g. a nonce).
+    for (const field of ["action", "resource"]) {
+      if (typeof args[field] === "string" && receipt?.context?.[field] !== args[field]) {
+        console.error(`invalid: context ${field} mismatch`);
+        process.exit(1);
+      }
     }
     const t0 = process.hrtime.bigint();
     const result = verifyReceipt(receipt, opts);
