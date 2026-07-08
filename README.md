@@ -192,8 +192,8 @@ for more deployment guidance.
 ## Performance
 
 The current Node.js reference implementation scales linearly with `depth`.
-These are single-run local measurements from the development machine and should
-be treated as rough guidance, not a portable benchmark.
+These are best-of-three local measurements from the development machine and
+should be treated as rough guidance, not a portable benchmark.
 
 | Depth | Create Receipt | Direct Verify |
 | ---: | ---: | ---: |
