@@ -90,6 +90,7 @@ console.log(result.ok);
 ```
 
 For local development before npm publication, import from `./src/cel.js`.
+From a local checkout, the CLI can also be run as `npx . <command>`.
 
 ## Quick Start
 
@@ -196,9 +197,9 @@ be treated as rough guidance, not a portable benchmark.
 
 | Depth | Create Receipt | Direct Verify |
 | ---: | ---: | ---: |
-| 10,000 | ~32 ms | ~22 ms |
-| 100,000 | ~215 ms | ~216 ms |
-| 1,000,000 | ~2,160 ms | ~2,200 ms |
+| 10,000 | ~22 ms | ~22 ms |
+| 100,000 | ~219 ms | ~220 ms |
+| 1,000,000 | ~2,240 ms | ~2,280 ms |
 
 Run your own benchmark:
 
