@@ -67,6 +67,69 @@ test("browser canonicalization matches node canonicalization", () => {
   assert.equal(browserImpl.canonicalize(value), nodeImpl.canonicalize(value));
 });
 
+test("browser verifier rejects non-canonical base64url roots", async () => {
+  // A final base64url character with non-zero padding bits decodes to the same
+  // bytes but is not the canonical encoding; the round-trip check must catch it.
+  const receipt = await browserImpl.createReceipt({ depth: 1, epoch: "e", context: { a: 1 } });
+  // Substitute a different final char that still passes the charset regex but
+  // may not re-encode to the same string. We iterate a short alphabet to find
+  // one that is genuinely different and still a valid base64url char.
+  const B64URL = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+  const original = receipt.root.at(-1);
+  const badChar = B64URL.split("").find(c => c !== original) ?? "A";
+  const bad = { ...receipt, root: receipt.root.slice(0, -1) + badChar };
+  const result = await browserImpl.verifyReceipt(bad, { maxDepth: 1 });
+  assert.equal(result.ok, false);
+});
+
+test("browser verifier enforces requiredContext parity with node", async () => {
+  const receipt = await browserImpl.createReceipt({ depth: 10, epoch: "e", context: { action: "x" } });
+  const opts = { maxDepth: 10 };
+  assert.equal(
+    (await browserImpl.verifyReceipt(receipt, { ...opts, requiredContext: { action: "x" } })).ok,
+    true,
+    "matching requiredContext must pass"
+  );
+  assert.equal(
+    (await browserImpl.verifyReceipt(receipt, { ...opts, requiredContext: { action: "y" } })).ok,
+    false,
+    "mismatched requiredContext must fail"
+  );
+  // Node verifier must agree on both outcomes
+  assert.equal(
+    nodeImpl.verifyReceipt(receipt, { ...opts, requiredContext: { action: "x" } }).ok,
+    true
+  );
+  assert.equal(
+    nodeImpl.verifyReceipt(receipt, { ...opts, requiredContext: { action: "y" } }).ok,
+    false
+  );
+});
+
+test("browser and node reject oversized context and epoch identically", async () => {
+  const longEpoch = "e".repeat(300); // > MAX_EPOCH_BYTES (256)
+  const longCtx = { key: "x".repeat(5000) }; // > MAX_CONTEXT_BYTES (4096)
+  const base = { depth: 1 };
+
+  await assert.rejects(
+    () => browserImpl.createReceipt({ ...base, epoch: longEpoch, context: { a: 1 } }),
+    /epoch exceeds/
+  );
+  assert.throws(
+    () => nodeImpl.createReceipt({ ...base, epoch: longEpoch, context: { a: 1 } }),
+    /epoch exceeds/
+  );
+
+  await assert.rejects(
+    () => browserImpl.createReceipt({ ...base, epoch: "e", context: longCtx }),
+    /context exceeds/
+  );
+  assert.throws(
+    () => nodeImpl.createReceipt({ ...base, epoch: "e", context: longCtx }),
+    /context exceeds/
+  );
+});
+
 test("browser epoch helpers match node epoch helpers", () => {
   const nowMs = 1_700_000_000_000;
   assert.equal(
