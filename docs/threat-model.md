@@ -43,7 +43,9 @@ on your own devices before deploying.
 
 In direct verification mode, the server spends CPU proportional to the receipt
 depth. Always set a low `maxDepth`, reject malformed requests cheaply, and keep
-ordinary rate limits in front of CEL verification.
+ordinary rate limits in front of CEL verification. Verify cheap policy checks
+before hashing: `version`, `algorithm`, `depth <= maxDepth`, expected context
+fields, allowed epoch, and root format.
 
 ### Hardware Asymmetry
 
@@ -60,6 +62,8 @@ or alternative paths exist.
 
 Receipts are reusable unless the context and epoch prevent reuse. Bind receipts
 to an action, resource, method, audience, and short epoch where possible.
+Servers must enforce route-specific minimum depth. A receipt can be
+cryptographically valid but still too cheap for the endpoint.
 
 Attackers can also generate receipts in advance for known future epochs or
 known contexts, then spend them later. Short epoch windows, server-issued
@@ -90,6 +94,9 @@ CAPTCHA replacement will invite the wrong security review.
 ## Production Checklist
 
 - set a strict `maxDepth`
+- enforce route-specific minimum depth before verification
+- reject epochs or nonces not issued/accepted by the server
+- keep CEL verification behind normal IP/account/edge rate limits
 - accept at most the current and immediately previous time-window epoch
 - use server-issued nonces for higher-risk actions
 - bind context to the exact action, resource, method, and audience
