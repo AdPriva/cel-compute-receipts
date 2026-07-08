@@ -20,7 +20,10 @@
   ],
   "main": "src/cel.js",
   "exports": {
-    ".": "./src/cel.js"
+    ".": {
+      "import": "./src/cel.js",
+      "default": "./src/cel.js"
+    }
   },
   "bin": {
     "cel": "./src/cli.js"
