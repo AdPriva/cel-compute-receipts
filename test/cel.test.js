@@ -129,6 +129,39 @@ test("canonicalize test vector", () => {
     '{"a":{"y":2,"z":true},"b":[1,"x",null]}');
 });
 
+test("unsupported algorithm is rejected (v0 is sha256-only)", () => {
+  const receipt = createReceipt({ depth: 10, epoch: "e", context: CTX });
+  const bad = { ...receipt, algorithm: "sha512" };
+  const result = verifyReceipt(bad, { maxDepth: 10 });
+  assert.equal(result.ok, false);
+  assert.match(result.error, /unsupported algorithm/);
+});
+
+test("unknown extra fields on the receipt are ignored", () => {
+  // Extra fields are not part of the root derivation; verification only
+  // reads the six defined fields.
+  const receipt = createReceipt({ depth: 100, epoch: "e", context: CTX });
+  const extended = { ...receipt, elapsedMs: 12.3, note: "ignored" };
+  assert.equal(verifyReceipt(extended, { maxDepth: 100 }).ok, true);
+});
+
+test("malformed base64url root is rejected", () => {
+  const receipt = createReceipt({ depth: 10, epoch: "e", context: CTX });
+  for (const root of ["!!!invalid", "", "AAAA", 42, null]) {
+    const result = verifyReceipt({ ...receipt, root }, { maxDepth: 10 });
+    assert.equal(result.ok, false, `root=${JSON.stringify(root)} should fail`);
+  }
+});
+
+test("oversized context is rejected on both sides", () => {
+  const big = { pad: "x".repeat(5000) }; // > 4096-byte canonical limit
+  assert.throws(() => createReceipt({ depth: 10, epoch: "e", context: big }), RangeError);
+  const receipt = createReceipt({ depth: 10, epoch: "e", context: CTX });
+  const result = verifyReceipt({ ...receipt, context: big }, { maxDepth: 10 });
+  assert.equal(result.ok, false);
+  assert.match(result.error, /invalid context/);
+});
+
 test("pinned interop test vectors (docs/protocol.md)", () => {
   const v1 = createReceipt({ depth: 3, epoch: "cel-test", context: { action: "vector" } });
   assert.equal(v1.root, "SUa6CzV6VNZnDfweGuysAn6xy8t5KjCaU7g3ApFCB1g");
