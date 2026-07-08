@@ -244,6 +244,26 @@ test("malformed base64url root is rejected", () => {
   }
 });
 
+test("non-canonical base64url roots are rejected", () => {
+  const receipt = createReceipt({
+    depth: 1,
+    epoch: "test-epoch",
+    context: { action: "test", resource: "/demo" }
+  });
+  // Node's Buffer.from(str, "base64url") silently accepts multiple final
+  // characters that decode to the same bytes. The round-trip check must
+  // catch them all — only the canonical encoding is accepted.
+  const B64URL = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+  const original = receipt.root.at(-1);
+  const alts = B64URL.split("").filter(c => c !== original).slice(0, 3);
+  for (const suffix of alts) {
+    const bad = { ...receipt, root: receipt.root.slice(0, -1) + suffix };
+    const result = verifyReceipt(bad, { maxDepth: 1 });
+    assert.equal(result.ok, false, `root ending in ${suffix} should fail`);
+    assert.match(result.error, /canonical base64url|root mismatch/);
+  }
+});
+
 test("oversized context is rejected on both sides", () => {
   const big = { pad: "x".repeat(5000) }; // > 4096-byte canonical limit
   assert.throws(() => createReceipt({ depth: 10, epoch: "e", context: big }), RangeError);
