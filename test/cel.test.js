@@ -129,10 +129,10 @@ test("canonicalize test vector", () => {
     '{"a":{"y":2,"z":true},"b":[1,"x",null]}');
 });
 
-test("known test vector for interop", () => {
-  // Pinned vector: any other implementation must reproduce this root.
-  const receipt = createReceipt({ depth: 3, epoch: "cel-test", context: { action: "vector" } });
-  assert.equal(receipt.root.length, 43); // 32 bytes base64url, no padding
-  const again = createReceipt({ depth: 3, epoch: "cel-test", context: { action: "vector" } });
-  assert.equal(receipt.root, again.root);
+test("pinned interop test vectors (docs/protocol.md)", () => {
+  const v1 = createReceipt({ depth: 3, epoch: "cel-test", context: { action: "vector" } });
+  assert.equal(v1.root, "SUa6CzV6VNZnDfweGuysAn6xy8t5KjCaU7g3ApFCB1g");
+  assert.equal(v1.root.length, 43); // 32 bytes base64url, no padding
+  const v2 = createReceipt({ depth: 10000, epoch: "cel-test", context: { action: "vector" } });
+  assert.equal(v2.root, "mgEA_H5SuqfxzcjpgMfavrEb0_URx7Wl8UCPFedtg30");
 });

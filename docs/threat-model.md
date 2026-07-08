@@ -42,6 +42,13 @@ cost equal for everyone.
 Receipts are reusable unless the context and epoch prevent reuse. Bind receipts
 to an action, resource, method, audience, and short epoch where possible.
 
+### Precomputation and receipt farms
+
+Work is sequential per receipt but parallel across receipts. An adversary who
+knows the context format can farm many receipts within an epoch window using
+many cores or machines. Short epochs, per-request nonces in the context, and
+depth choices that make farming economically unattractive all reduce this.
+
 ### Overclaiming
 
 CEL should be described as a compute-pricing primitive. Calling it a complete

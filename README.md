@@ -88,6 +88,39 @@ node ./src/cli.js verify --receipt receipt.json --max-depth 10000
 node ./src/cli.js bench --depth 100000
 ```
 
+## Benchmarks
+
+Single core, Node.js 22 (x86-64 container). Run `npm run bench` on your own
+hardware; mobile and low-power numbers are welcome contributions.
+
+| Depth   | Prove time | Throughput      |
+| ------- | ---------- | --------------- |
+| 1,000   | ~8 ms      | ~120k steps/s   |
+| 10,000  | ~26 ms     | ~380k steps/s   |
+| 100,000 | ~212 ms    | ~470k steps/s   |
+
+In direct verification mode, verifying costs roughly the same as proving.
+Choose depths accordingly.
+
+## How CEL Compares
+
+| Mechanism      | Cost model              | Needs clock | Needs identity | Verify cost      | Proves human |
+| -------------- | ----------------------- | ----------- | -------------- | ---------------- | ------------ |
+| Hashcash / PoW | probabilistic search    | no          | no             | O(1)             | no           |
+| Client puzzles | interactive challenge   | server-side | no             | O(1)             | no           |
+| VDF            | sequential (time-bound) | assumption  | no             | O(1) w/ proof    | no           |
+| CAPTCHA        | human attention         | no          | no             | service call     | approximately|
+| CEL v0         | deterministic sequential| no          | no             | O(depth)         | no           |
+
+CEL trades verification efficiency for determinism and simplicity: cost is
+exact rather than sampled from a distribution, and receipts are self-contained
+artifacts bound to an action. Succinct verification (O(1) verify) is on the
+roadmap and is what would make CEL viable on public unauthenticated hot paths.
+
+Related projects worth knowing: Hashcash, mCaptcha, Friendly Captcha, Anubis,
+and Privacy Pass. CEL is not affiliated with Google's Common Expression
+Language, which shares the acronym.
+
 ## AI Agent Use Case
 
 An agent can attach a CEL receipt to each outbound request. A receiving service

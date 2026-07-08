@@ -6,9 +6,12 @@
 
 Other good options:
 
+- `compute-receipts` (best for discoverability)
 - `cel-compute-receipts`
-- `compute-receipts`
-- `cel-protocol`
+
+Note: the acronym CEL collides with Google's Common Expression Language, a
+large established project. Prefer names that include `compute` or `receipts`,
+and say "not affiliated with Google's CEL" in the README.
 
 ## Suggested Description
 

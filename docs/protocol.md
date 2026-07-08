@@ -78,6 +78,22 @@ across actions. For example:
 }
 ```
 
+## Test Vectors
+
+Any conforming implementation must reproduce these roots.
+
+Vector 1 (`depth=3`, `epoch="cel-test"`, `context={"action":"vector"}`):
+
+```text
+root = SUa6CzV6VNZnDfweGuysAn6xy8t5KjCaU7g3ApFCB1g
+```
+
+Vector 2 (`depth=10000`, `epoch="cel-test"`, `context={"action":"vector"}`):
+
+```text
+root = mgEA_H5SuqfxzcjpgMfavrEb0_URx7Wl8UCPFedtg30
+```
+
 ## Important Caveat
 
 This repository implements the direct verification mode only. Succinct

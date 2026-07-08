@@ -1,12 +1,14 @@
 # Research Review
 
-## Short Rating
+## Summary Assessment
 
-As an open-source abuse-throttling primitive: 8/10.
+As an open-source abuse-throttling primitive, CEL is a strong fit: the scope
+is honest and the primitive is simple to reason about.
 
-As a complete CAPTCHA replacement: 5/10.
+As a complete CAPTCHA replacement, it is not one and should not be positioned
+as one; it replaces CAPTCHAs only where the real goal is throttling.
 
-As an AI-agent web primitive: 7/10, with strong potential if paired with clear
+As an AI-agent web primitive, it has strong potential if paired with clear
 policies and cheap verification.
 
 ## What Is Strong
