@@ -15,6 +15,28 @@ undesirable.
 
 Read the full paper: [Verifiable Inevitability of Computation](https://github.com/adpriva/cel-compute-receipts/blob/main/docs/CEL-paper.pdf).
 
+## Try It in 60 Seconds
+
+CAPTCHAs ask "are you human?" CEL asks "did this action pay compute?"
+See the whole loop from a local checkout, no dependencies:
+
+```bash
+# prove ~20k sequential hash steps for an action, then verify the receipt
+node src/cli.js prove --depth 20000 --epoch demo --context '{"action":"agent.message"}' --output receipt.json
+node src/cli.js verify --receipt receipt.json --max-depth 20000
+```
+
+Or run the full agent flow — challenge, proof, admission, replay rejection:
+
+```bash
+node examples/agent-gateway.js                      # terminal 1: the gateway
+node examples/agent-gateway.js --client "hello"     # terminal 2: the agent
+```
+
+The client gets a 402 challenge, does the work, is admitted with 200, and
+its replayed receipt is rejected. CEL is not anti-bot; it is cost-based
+admission control.
+
 ## Status
 
 This repository is experimental research code. It is not audited, it is not a
