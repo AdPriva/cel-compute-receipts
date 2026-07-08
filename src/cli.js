@@ -154,11 +154,15 @@ switch (command) {
 
   case "challenge": {
     const depth = requireInt(args, "depth");
+    if (typeof args.action !== "string" || args.action.length === 0) {
+      console.error("error: --action is required");
+      process.exit(2);
+    }
     const windowSeconds = args["window-seconds"] ? requireInt(args, "window-seconds") : 300;
     const challenge = createChallenge({
       depth,
       windowSeconds,
-      action: args.action ?? "unspecified",
+      action: args.action,
       resource: args.resource ?? "/"
     });
     console.log(JSON.stringify(challenge, null, 2));
@@ -249,7 +253,7 @@ switch (command) {
       const t0 = process.hrtime.bigint();
       createReceipt({ depth: d, epoch, context: { bench: true } });
       const ms = Number(process.hrtime.bigint() - t0) / 1e6;
-      console.log(`depth=${d}\t${ms.toFixed(1)} ms\t${(d / ms * 1000).toFixed(0)} steps/s`);
+      console.log(`depth=${d}\t${ms.toFixed(1)} ms\t${(d / ms * 1000).toFixed(0)} steps/s\t(proving only)`);
     }
     break;
   }
