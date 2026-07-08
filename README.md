@@ -13,7 +13,7 @@ public API calls, anonymous form submissions, decentralized messages, agent
 requests, queue admission, and other places where identity is weak or
 undesirable.
 
-Read the full paper: [Verifiable Inevitability of Computation](./docs/CEL-paper.pdf).
+Read the full paper: [Verifiable Inevitability of Computation](https://github.com/adpriva/cel-compute-receipts/blob/main/docs/CEL-paper.pdf).
 
 ## Status
 
@@ -113,7 +113,7 @@ node ./src/cli.js verify --receipt receipt.json --max-depth 10000
 When installed as a package, the CLI binary is `cel`:
 
 ```bash
-cel prove --depth 10000 --epoch demo --context '{"action":"agent.message"}'
+cel prove --depth 10000 --epoch demo --context '{"action":"agent.message"}' --output receipt.json
 cel verify --receipt receipt.json --max-depth 10000
 ```
 
@@ -143,7 +143,9 @@ That means "CEL epoch using 300-second windows, window number 5941344."
 
 Verifiers should always pass `maxDepth` to `verifyReceipt()`. This prevents a
 malicious receipt from forcing the server to recompute an unexpectedly large
-chain.
+chain. Verifiers must also enforce the route's required minimum depth
+(`receipt.depth >= policyDepth`) before verification: a receipt can be
+cryptographically valid but declare cheaper work than the endpoint demands.
 
 ## Receipt Format
 
@@ -212,11 +214,11 @@ npm run bench
 - [src/cel.js](./src/cel.js) - core CEL implementation
 - [src/cli.js](./src/cli.js) - command-line tool
 - [test/cel.test.js](./test/cel.test.js) - unit tests
-- [docs/CEL-paper.pdf](./docs/CEL-paper.pdf) - full paper
+- [docs/CEL-paper.pdf](https://github.com/adpriva/cel-compute-receipts/blob/main/docs/CEL-paper.pdf) - full paper (GitHub only, not in the npm package)
 - [docs/protocol.md](./docs/protocol.md) - protocol notes
 - [docs/threat-model.md](./docs/threat-model.md) - deployment risks and limits
-- [docs/research-review.md](./docs/research-review.md) - positioning and critique
-- [docs/github-launch.md](./docs/github-launch.md) - launch checklist
+- [docs/research-review.md](https://github.com/adpriva/cel-compute-receipts/blob/main/docs/research-review.md) - positioning and critique (GitHub only)
+- [docs/github-launch.md](https://github.com/adpriva/cel-compute-receipts/blob/main/docs/github-launch.md) - launch checklist (GitHub only)
 - [examples/agent-gateway.js](./examples/agent-gateway.js) - HTTP example
 
 ## Development
