@@ -3,6 +3,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 [![Node.js >=18](https://img.shields.io/badge/node-%3E%3D18-339933.svg)](https://nodejs.org/)
 [![Status: experimental](https://img.shields.io/badge/status-experimental-orange.svg)](#status)
+[![test](https://github.com/adpriva/cel-compute-receipts/actions/workflows/test.yml/badge.svg)](https://github.com/adpriva/cel-compute-receipts/actions/workflows/test.yml)
 
 Computational Effort Layer, or CEL, is a lightweight reference implementation
 for compute receipts: work-bound artifacts that show a client spent a defined
@@ -21,6 +22,10 @@ CAPTCHAs ask "are you human?" CEL asks "did this action pay compute?"
 See the whole loop from a local checkout, no dependencies:
 
 ```bash
+git clone https://github.com/AdPriva/cel-compute-receipts.git
+cd cel-compute-receipts
+npm install
+
 # prove ~20k sequential hash steps for an action, then verify the receipt
 node src/cli.js prove --depth 20000 --epoch demo --context '{"action":"agent.message"}' --output receipt.json
 node src/cli.js verify --receipt receipt.json --max-depth 20000
@@ -61,7 +66,7 @@ CEL does not prove that the caller is human, honest, unique, authorized, or
 well-intentioned. It only proves that a specific amount of work was performed
 for a specific context.
 
-## Could This Replace CAPTCHA?
+## Could CEL Replace CAPTCHA-like Challenges?
 
 For some flows, yes. If the job of the CAPTCHA is really "make spam more
 expensive," CEL can be a cleaner and more privacy-preserving primitive.
@@ -86,13 +91,13 @@ npm install
 npm test
 ```
 
-After publishing this package to npm:
+After npm publication:
 
 ```bash
 npm install cel-compute-receipts
 ```
 
-Use the package API:
+After npm publication, use the package API:
 
 ```js
 import { createReceipt, verifyReceipt } from "cel-compute-receipts";
@@ -111,7 +116,7 @@ const result = verifyReceipt(receipt, { maxDepth: 10000 });
 console.log(result.ok);
 ```
 
-For local development before npm publication, import from `./src/cel.js`.
+Until npm publication, use a local checkout and import from `./src/cel.js`.
 From a local checkout, the CLI can also be run as `npx . <command>`.
 
 ## Quick Start
@@ -208,6 +213,8 @@ protocol — no Node APIs, no dependencies, importable directly by a browser.
 The test suite asserts it produces byte-identical roots to the Node
 implementation, including the pinned interop vector.
 
+After npm publication:
+
 ```js
 import { createReceipt, verifyReceipt } from "cel-compute-receipts/browser";
 
@@ -215,7 +222,7 @@ const receipt = await createReceipt({ depth: 10000, epoch, context });
 const result = await verifyReceipt(receipt, { maxDepth: 10000 });
 ```
 
-Try it interactively: serve the repo (`npx serve .`) and open
+Before npm publication, use the local browser demo: serve the repo (`npx serve .`) and open
 [examples/browser-demo.html](./examples/browser-demo.html).
 
 ## Security Considerations
@@ -256,6 +263,7 @@ npm run bench
 - [src/cel-browser.js](./src/cel-browser.js) - WebCrypto implementation (browser)
 - [src/cli.js](./src/cli.js) - command-line tool
 - [test/cel.test.js](./test/cel.test.js) - unit tests
+- [test/cel-browser.test.js](./test/cel-browser.test.js) - cross-implementation interop tests
 - [docs/CEL-paper.pdf](https://github.com/adpriva/cel-compute-receipts/blob/main/docs/CEL-paper.pdf) - full paper (GitHub only, not in the npm package)
 - [docs/protocol.md](./docs/protocol.md) - protocol notes
 - [docs/threat-model.md](./docs/threat-model.md) - deployment risks and limits
