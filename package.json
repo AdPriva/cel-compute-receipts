@@ -1,0 +1,31 @@
+{
+  "name": "computational-effort-layer",
+  "version": "0.1.0",
+  "description": "Compute receipts for pricing digital actions without identity or behavioral classification.",
+  "type": "module",
+  "main": "src/cel.js",
+  "exports": {
+    ".": "./src/cel.js"
+  },
+  "bin": {
+    "cel": "./src/cli.js"
+  },
+  "scripts": {
+    "test": "node --test",
+    "bench": "node src/cli.js bench"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": [
+    "proof-of-work",
+    "client-puzzles",
+    "anti-abuse",
+    "rate-limiting",
+    "ai-agents",
+    "captcha-alternative",
+    "compute-receipts"
+  ],
+  "author": "Cem Sel <cem@adpriva.com>",
+  "license": "MIT"
+}

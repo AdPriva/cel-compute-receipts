@@ -1,0 +1,4 @@
+node_modules/
+*.log
+receipt.json
+.DS_Store
