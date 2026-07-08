@@ -16,6 +16,11 @@
  *   - put ordinary rate limits and body-size limits in front of this
  *   - receipts here are bound to action + resource + epoch; add a nonce or
  *     request hash to the context for strict single-use semantics
+ *   - receipts travel in an HTTP header here for simplicity; some proxies cap
+ *     header sizes (~8 KB), so large-context deployments should move the
+ *     receipt into the request body
+ *   - browser-based agents would additionally need CORS headers; this example
+ *     is Node-to-Node only
  */
 
 import { createServer } from "node:http";
@@ -26,11 +31,12 @@ import {
   currentEpochs
 } from "../src/cel.js";
 
-const PORT = 8787;
-const REQUIRED_DEPTH = 20000; // ~a few ms of client compute
-const MAX_DEPTH = 50000;      // hard verifier ceiling
-const WINDOW_SECONDS = 300;
+const PORT = Number(process.env.CEL_GATEWAY_PORT) || 8787;
+const REQUIRED_DEPTH = Number(process.env.CEL_REQUIRED_DEPTH) || 20000; // ~a few ms of client compute
+const MAX_DEPTH = Number(process.env.CEL_MAX_DEPTH) || 50000;           // hard verifier ceiling
+const WINDOW_SECONDS = Number(process.env.CEL_WINDOW_SECONDS) || 300;
 const MAX_RECEIPT_BYTES = 8192;
+const MAX_BODY_BYTES = 65536;
 
 /* ------------------------------------------------------------------ */
 /* Server                                                              */
@@ -84,8 +90,19 @@ function startServer() {
     }
 
     let body = "";
-    req.on("data", (c) => { body += c; if (body.length > 65536) req.destroy(); });
+    let rejected = false;
+    req.on("data", (chunk) => {
+      if (rejected) return;
+      body += chunk;
+      if (body.length > MAX_BODY_BYTES) {
+        rejected = true;
+        // Respond before destroying so the client sees a 413, not ECONNRESET.
+        res.writeHead(413, { connection: "close" }).end("body too large\n");
+        req.destroy();
+      }
+    });
     req.on("end", () => {
+      if (rejected) return;
       res.writeHead(200, { "content-type": "application/json" });
       res.end(JSON.stringify({ ok: true, echo: body, verifiedDepth: receipt.depth }) + "\n");
     });
