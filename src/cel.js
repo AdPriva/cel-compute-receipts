@@ -276,7 +276,13 @@ export function verifyReceipt(receipt, opts = {}) {
   }
 
   if (requiredContext !== undefined) {
-    if (contextInput(requiredContext) !== ctxInput) {
+    let requiredInput;
+    try {
+      requiredInput = contextInput(requiredContext);
+    } catch (err) {
+      return { ok: false, error: `invalid requiredContext: ${err.message}` };
+    }
+    if (requiredInput !== ctxInput) {
       return { ok: false, error: "context mismatch" };
     }
   }

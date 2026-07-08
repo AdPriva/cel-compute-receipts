@@ -266,6 +266,53 @@ test("createChallenge produces provable challenge", () => {
   assert.equal(verifyReceipt(receipt, { maxDepth: 100, requiredEpoch: ch.epoch }).ok, true);
 });
 
+test("createChallenge preserves algorithm and extra context fields", () => {
+  const ch = createChallenge({
+    depth: 100,
+    action: "agent.message",
+    resource: "/api/agent",
+    algorithm: "sha512",
+    extra: { nonce: "abc-123", method: "POST" }
+  });
+  assert.equal(ch.algorithm, "sha512");
+  assert.equal(ch.context.nonce, "abc-123");
+  assert.equal(ch.context.method, "POST");
+  const receipt = createReceipt({
+    depth: ch.depth,
+    epoch: ch.epoch,
+    context: ch.context,
+    algorithm: ch.algorithm
+  });
+  assert.equal(
+    verifyReceipt(receipt, { maxDepth: 100, requiredEpoch: ch.epoch, requiredContext: ch.context }).ok,
+    true
+  );
+});
+
+test("invalid verifier-supplied requiredContext returns ok:false, not a throw", () => {
+  const receipt = createReceipt({ depth: 50, epoch: "e", context: CTX });
+  for (const bad of [{ x: Infinity }, { n: 1n }, { f: () => 1 }]) {
+    let result;
+    assert.doesNotThrow(() => { result = verifyReceipt(receipt, { maxDepth: 50, requiredContext: bad }); });
+    assert.equal(result.ok, false);
+    assert.match(result.error, /invalid requiredContext/);
+  }
+});
+
+test("wrong digest length for the algorithm is rejected explicitly", () => {
+  const r256 = createReceipt({ depth: 10, epoch: "e", context: CTX });
+  const r512 = createReceipt({ depth: 10, epoch: "e", context: CTX, algorithm: "sha512" });
+  // Valid base64url, wrong length: sha256 receipt with a 64-byte root and
+  // sha512 receipt with a 32-byte root.
+  const swapped256 = { ...r256, root: r512.root };
+  const swapped512 = { ...r512, root: r256.root };
+  for (const bad of [swapped256, swapped512]) {
+    const result = verifyReceipt(bad, { maxDepth: 10 });
+    assert.equal(result.ok, false);
+    assert.match(result.error, /wrong length/);
+  }
+});
+
 /* ------------------------------------------------------------------ */
 /* Pinned interop vector (normative, from docs/protocol.md)            */
 /* ------------------------------------------------------------------ */
