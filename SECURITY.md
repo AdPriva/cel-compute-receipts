@@ -50,8 +50,8 @@ Please do not open a public GitHub issue for security-sensitive reports.
 
 Preferred reporting channels:
 
-1. Use GitHub private vulnerability reporting once the public repository is
-   available.
+1. Use GitHub private vulnerability reporting if it is enabled for this
+   repository.
 2. If private reporting is unavailable, email the maintainer at
    `cem@adpriva.com`.
 
