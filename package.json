@@ -3,6 +3,15 @@
   "version": "0.1.0",
   "description": "Compute receipts for pricing digital actions without identity or behavioral classification.",
   "type": "module",
+  "sideEffects": false,
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/adpriva/cel-compute-receipts.git"
+  },
+  "bugs": {
+    "url": "https://github.com/adpriva/cel-compute-receipts/issues"
+  },
+  "homepage": "https://github.com/adpriva/cel-compute-receipts#readme",
   "files": [
     "src/",
     "README.md",
@@ -18,7 +27,8 @@
   },
   "scripts": {
     "test": "node --test",
-    "bench": "node src/cli.js bench"
+    "bench": "node src/cli.js bench",
+    "prepublishOnly": "npm test"
   },
   "engines": {
     "node": ">=18"
