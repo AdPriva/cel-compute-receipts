@@ -110,7 +110,7 @@ function base64urlDecode(str) {
   return out.subarray(0, index);
 }
 
-/** Constant-time comparison of two equal-length byte arrays. */
+/** Best-effort constant-time comparison of two equal-length byte arrays. */
 function timingSafeEqual(a, b) {
   if (a.length !== b.length) return false;
   let diff = 0;
@@ -305,6 +305,11 @@ export async function verifyReceipt(receipt, opts = {}) {
     return { ok: false, error: "root is not valid base64url" };
   }
   const claimed = base64urlDecode(receipt.root);
+  // Round-trip check ensures the encoding is canonical (no non-zero padding bits
+  // in the final base64url character that would decode to the same bytes).
+  if (base64url(claimed) !== receipt.root) {
+    return { ok: false, error: "root is not canonical base64url" };
+  }
   if (claimed.length !== ALGORITHMS[receipt.algorithm].bytes) {
     return { ok: false, error: "root has wrong length for algorithm" };
   }
