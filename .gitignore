@@ -1,4 +1,27 @@
+# Dependencies
 node_modules/
+
+# Logs
 *.log
+npm-debug.log*
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# Future build/coverage outputs
+coverage/
+dist/
+build/
+
+# Local outputs
 receipt.json
+*.tgz
+
+# IDE / OS
 .DS_Store
+.vscode/
+.idea/
+*.swp
+*.swo
