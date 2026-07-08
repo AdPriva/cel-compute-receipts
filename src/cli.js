@@ -10,7 +10,7 @@
  *   bench     --depth N
  */
 
-import { readFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import {
   createReceipt,
   verifyReceipt,
@@ -59,7 +59,7 @@ function usage() {
   console.log(`usage:
   cel epoch     [--window-seconds 300]
   cel challenge --depth N --action X [--resource Y] [--window-seconds 300]
-  cel prove     --depth N --epoch E [--context JSON-or-string]
+  cel prove     --depth N --epoch E [--context JSON-or-string] [--algorithm sha256|sha512] [--output file.json]
   cel verify    --receipt file.json --max-depth N [--epoch E] [--window-seconds S]
   cel bench     [--depth 100000]`);
 }
@@ -94,11 +94,16 @@ switch (command) {
       process.exit(2);
     }
     const context = parseContext(args.context);
-    const t0 = process.hrtime.bigint();
-    const receipt = createReceipt({ depth, epoch: args.epoch, context });
-    const ms = Number(process.hrtime.bigint() - t0) / 1e6;
-    console.log(JSON.stringify(receipt, null, 2));
-    console.error(`proved depth=${depth} in ${ms.toFixed(1)} ms`);
+    const algorithm = typeof args.algorithm === "string" ? args.algorithm : undefined;
+    const receipt = createReceipt({ depth, epoch: args.epoch, context, algorithm });
+    const json = JSON.stringify(receipt, null, 2);
+    if (typeof args.output === "string") {
+      writeFileSync(args.output, json + "\n");
+      console.error(`wrote receipt to ${args.output}`);
+    } else {
+      console.log(json);
+    }
+    console.error(`proved depth=${depth} in ${receipt.elapsedMs} ms`);
     break;
   }
 

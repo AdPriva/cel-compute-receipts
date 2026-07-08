@@ -1,8 +1,14 @@
 {
-  "name": "computational-effort-layer",
+  "name": "cel-compute-receipts",
   "version": "0.1.0",
   "description": "Compute receipts for pricing digital actions without identity or behavioral classification.",
   "type": "module",
+  "files": [
+    "src/",
+    "README.md",
+    "LICENSE",
+    "SECURITY.md"
+  ],
   "main": "src/cel.js",
   "exports": {
     ".": "./src/cel.js"

@@ -5,7 +5,8 @@
  * amount of sequential computation for a specific action.
  *
  * This is experimental research code. See SECURITY.md and docs/threat-model.md
- * before deploying anything.
+ * before deploying anything. Byte-level behavior is specified in
+ * docs/protocol.md; the pinned test vectors there are normative.
  *
  * No runtime dependencies. Node.js >= 18.
  */
@@ -13,9 +14,20 @@
 import { createHash, timingSafeEqual } from "node:crypto";
 
 export const VERSION = "cel/v0";
-export const ALGORITHM = "sha256";
+export const DEFAULT_ALGORITHM = "sha256";
 
-const HASH_BYTES = 32;
+/** Supported hash algorithms and their digest sizes in bytes. */
+export const ALGORITHMS = {
+  sha256: 32,
+  sha512: 64
+};
+
+/**
+ * Default verifier depth ceiling. Applications should set a much lower
+ * maxDepth for interactive or unauthenticated traffic.
+ */
+export const DEFAULT_MAX_DEPTH = 5_000_000;
+
 const MAX_CONTEXT_BYTES = 4096;
 const MAX_EPOCH_BYTES = 256;
 
@@ -23,8 +35,8 @@ const MAX_EPOCH_BYTES = 256;
 /* Encoding helpers                                                    */
 /* ------------------------------------------------------------------ */
 
-function sha256(...buffers) {
-  const h = createHash("sha256");
+function hash(algorithm, ...buffers) {
+  const h = createHash(algorithm);
   for (const b of buffers) h.update(b);
   return h.digest();
 }
@@ -36,37 +48,60 @@ function uint64be(n) {
 }
 
 /**
- * frame(x) = uint32be(byteLength(x)) || utf8(x)
+ * frame(x) = uint64be(byte_length(x)) || utf8(x)
  *
  * Length-prefixed framing prevents ambiguity when concatenating fields
  * into the seed derivation.
  */
 function frame(str) {
   const bytes = Buffer.from(str, "utf8");
-  const len = Buffer.alloc(4);
-  len.writeUInt32BE(bytes.length);
-  return Buffer.concat([len, bytes]);
+  return Buffer.concat([uint64be(bytes.length), bytes]);
 }
 
 /**
- * Deterministic JSON canonicalization: object keys sorted lexicographically
- * at every level, no whitespace, arrays preserved in order.
- * Strings, numbers, booleans and null pass through JSON.stringify.
+ * Deterministic JSON canonicalization:
+ * - object keys sorted lexicographically at every level
+ * - arrays preserve order
+ * - numbers must be finite
+ * - object fields with undefined values are omitted
+ * - Date values are serialized to ISO 8601 strings
+ * - functions, symbols, and bigints are rejected
  */
 export function canonicalize(value) {
-  if (value === null || typeof value !== "object") {
-    if (typeof value === "number" && !Number.isFinite(value)) {
-      throw new TypeError("context numbers must be finite");
-    }
-    if (value === undefined) throw new TypeError("undefined is not allowed");
+  if (value === undefined) {
+    throw new TypeError("undefined is not allowed as a context value");
+  }
+  const t = typeof value;
+  if (t === "function" || t === "symbol" || t === "bigint") {
+    throw new TypeError(`${t} values cannot be canonicalized`);
+  }
+  if (t === "number" && !Number.isFinite(value)) {
+    throw new TypeError("context numbers must be finite");
+  }
+  if (value === null || t !== "object") {
     return JSON.stringify(value);
+  }
+  if (value instanceof Date) {
+    return JSON.stringify(value.toISOString());
   }
   if (Array.isArray(value)) {
     return "[" + value.map(canonicalize).join(",") + "]";
   }
   const keys = Object.keys(value).sort();
-  const parts = keys.map((k) => JSON.stringify(k) + ":" + canonicalize(value[k]));
+  const parts = [];
+  for (const k of keys) {
+    if (value[k] === undefined) continue; // omitted, like JSON.stringify
+    parts.push(JSON.stringify(k) + ":" + canonicalize(value[k]));
+  }
   return "{" + parts.join(",") + "}";
+}
+
+/**
+ * Context bytes input per protocol: raw string if the context is a string,
+ * canonical JSON otherwise.
+ */
+function contextInput(context) {
+  return typeof context === "string" ? context : canonicalize(context);
 }
 
 function base64url(buf) {
@@ -79,12 +114,12 @@ function base64url(buf) {
 
 /**
  * Derive the seed:
- *   s0 = H(frame(policy) || frame(epoch) || frame(context))
+ *   s0 = H(frame(policy) || frame(epoch) || frame(context_input))
  * where policy = canonical JSON of { algorithm, depth, version }.
  */
-function deriveSeed({ depth, epoch, contextCanonical }) {
-  const policy = canonicalize({ algorithm: ALGORITHM, depth, version: VERSION });
-  return sha256(frame(policy), frame(epoch), frame(contextCanonical));
+function deriveSeed({ algorithm, depth, epoch, ctxInput }) {
+  const policy = canonicalize({ algorithm, depth, version: VERSION });
+  return hash(algorithm, frame(policy), frame(epoch), frame(ctxInput));
 }
 
 /**
@@ -94,11 +129,11 @@ function deriveSeed({ depth, epoch, contextCanonical }) {
  *     s_i = H(s_(i-1) || e_i)
  * Returns s_depth.
  */
-function assemble(seed, depth) {
+function assemble(algorithm, seed, depth) {
   let s = seed;
   for (let i = 1; i <= depth; i++) {
-    const e = sha256(s, uint64be(i));
-    s = sha256(s, e);
+    const e = hash(algorithm, s, uint64be(i));
+    s = hash(algorithm, s, e);
   }
   return s;
 }
@@ -107,9 +142,15 @@ function assemble(seed, depth) {
 /* Validation                                                          */
 /* ------------------------------------------------------------------ */
 
+function checkAlgorithm(algorithm) {
+  if (!Object.hasOwn(ALGORITHMS, algorithm)) {
+    throw new RangeError(`unsupported algorithm: ${algorithm}`);
+  }
+}
+
 function checkDepth(depth) {
-  if (!Number.isInteger(depth) || depth < 1 || depth > Number.MAX_SAFE_INTEGER) {
-    throw new RangeError("depth must be a positive integer");
+  if (!Number.isSafeInteger(depth) || depth < 1) {
+    throw new RangeError("depth must be a positive safe integer");
   }
 }
 
@@ -122,8 +163,8 @@ function checkEpoch(epoch) {
   }
 }
 
-function checkContext(contextCanonical) {
-  if (Buffer.byteLength(contextCanonical, "utf8") > MAX_CONTEXT_BYTES) {
+function checkContextSize(ctxInput) {
+  if (Buffer.byteLength(ctxInput, "utf8") > MAX_CONTEXT_BYTES) {
     throw new RangeError(`context exceeds ${MAX_CONTEXT_BYTES} bytes`);
   }
 }
@@ -136,27 +177,33 @@ function checkContext(contextCanonical) {
  * Create a compute receipt.
  *
  * @param {object} opts
- * @param {number} opts.depth   sequential depth (positive integer)
- * @param {string} opts.epoch   opaque validity-window identifier
- * @param {*}      opts.context application context (any JSON value)
- * @returns {object} receipt
+ * @param {number} opts.depth       sequential depth (positive safe integer)
+ * @param {string} opts.epoch       opaque validity-window identifier
+ * @param {*}      opts.context     application context (string used raw, other
+ *                                  JSON values canonicalized)
+ * @param {string} [opts.algorithm] "sha256" (default) or "sha512"
+ * @returns {object} receipt (includes informational elapsedMs)
  */
-export function createReceipt({ depth, epoch, context }) {
+export function createReceipt({ depth, epoch, context, algorithm = DEFAULT_ALGORITHM }) {
+  checkAlgorithm(algorithm);
   checkDepth(depth);
   checkEpoch(epoch);
-  const contextCanonical = canonicalize(context);
-  checkContext(contextCanonical);
+  const ctxInput = contextInput(context);
+  checkContextSize(ctxInput);
 
-  const seed = deriveSeed({ depth, epoch, contextCanonical });
-  const root = assemble(seed, depth);
+  const t0 = process.hrtime.bigint();
+  const seed = deriveSeed({ algorithm, depth, epoch, ctxInput });
+  const root = assemble(algorithm, seed, depth);
+  const elapsedMs = Number(process.hrtime.bigint() - t0) / 1e6;
 
   return {
     version: VERSION,
-    algorithm: ALGORITHM,
+    algorithm,
     depth,
     epoch,
     context,
-    root: base64url(root)
+    root: base64url(root),
+    elapsedMs: Math.round(elapsedMs * 100) / 100
   };
 }
 
@@ -164,21 +211,30 @@ export function createReceipt({ depth, epoch, context }) {
  * Verify a compute receipt by direct recomputation (Mode A).
  *
  * WARNING: verification cost is linear in receipt.depth. Always pass a strict
- * maxDepth and reject malformed/oversized requests before calling this.
+ * maxDepth (the default ceiling is DEFAULT_MAX_DEPTH) and reject
+ * malformed/oversized requests before calling this.
+ *
+ * `elapsedMs` and unknown extra fields on the receipt are informational and
+ * ignored; they are not part of the root derivation.
  *
  * @param {object} receipt
- * @param {object} opts
- * @param {number} opts.maxDepth          reject receipts deeper than this (required)
- * @param {string} [opts.requiredEpoch]   if set, receipt.epoch must equal it
- * @param {string[]} [opts.allowedEpochs] if set, receipt.epoch must be in it
- * @param {*}      [opts.requiredContext] if set, canonical context must match
+ * @param {object} [opts]
+ * @param {number}   [opts.maxDepth=DEFAULT_MAX_DEPTH] reject deeper receipts
+ * @param {string}   [opts.requiredEpoch]   if set, receipt.epoch must equal it
+ * @param {string[]} [opts.allowedEpochs]   if set, receipt.epoch must be in it
+ * @param {*}        [opts.requiredContext] if set, context input must match
  * @returns {{ ok: boolean, error?: string }}
  */
 export function verifyReceipt(receipt, opts = {}) {
-  const { maxDepth, requiredEpoch, allowedEpochs, requiredContext } = opts;
+  const {
+    maxDepth = DEFAULT_MAX_DEPTH,
+    requiredEpoch,
+    allowedEpochs,
+    requiredContext
+  } = opts;
 
-  if (!Number.isInteger(maxDepth) || maxDepth < 1) {
-    return { ok: false, error: "verifier must set a positive integer maxDepth" };
+  if (!Number.isSafeInteger(maxDepth) || maxDepth < 1) {
+    return { ok: false, error: "maxDepth must be a positive safe integer" };
   }
   if (receipt === null || typeof receipt !== "object") {
     return { ok: false, error: "receipt must be an object" };
@@ -186,11 +242,11 @@ export function verifyReceipt(receipt, opts = {}) {
   if (receipt.version !== VERSION) {
     return { ok: false, error: `unsupported version (expected ${VERSION})` };
   }
-  if (receipt.algorithm !== ALGORITHM) {
-    return { ok: false, error: `unsupported algorithm (expected ${ALGORITHM})` };
+  if (typeof receipt.algorithm !== "string" || !Object.hasOwn(ALGORITHMS, receipt.algorithm)) {
+    return { ok: false, error: "unsupported algorithm" };
   }
-  if (!Number.isInteger(receipt.depth) || receipt.depth < 1) {
-    return { ok: false, error: "depth must be a positive integer" };
+  if (!Number.isSafeInteger(receipt.depth) || receipt.depth < 1) {
+    return { ok: false, error: "depth must be a positive safe integer" };
   }
   if (receipt.depth > maxDepth) {
     return { ok: false, error: `depth ${receipt.depth} exceeds maxDepth ${maxDepth}` };
@@ -207,20 +263,20 @@ export function verifyReceipt(receipt, opts = {}) {
   if (allowedEpochs !== undefined && !allowedEpochs.includes(receipt.epoch)) {
     return { ok: false, error: "epoch not in allowed set" };
   }
-  if (typeof receipt.root !== "string") {
-    return { ok: false, error: "root must be a base64url string" };
+  if (typeof receipt.root !== "string" || receipt.root.length === 0) {
+    return { ok: false, error: "root must be a non-empty base64url string" };
   }
 
-  let contextCanonical;
+  let ctxInput;
   try {
-    contextCanonical = canonicalize(receipt.context);
-    checkContext(contextCanonical);
+    ctxInput = contextInput(receipt.context);
+    checkContextSize(ctxInput);
   } catch (err) {
     return { ok: false, error: `invalid context: ${err.message}` };
   }
 
   if (requiredContext !== undefined) {
-    if (canonicalize(requiredContext) !== contextCanonical) {
+    if (contextInput(requiredContext) !== ctxInput) {
       return { ok: false, error: "context mismatch" };
     }
   }
@@ -231,16 +287,17 @@ export function verifyReceipt(receipt, opts = {}) {
   } catch {
     return { ok: false, error: "root is not valid base64url" };
   }
-  if (claimed.length !== HASH_BYTES) {
-    return { ok: false, error: "root has wrong length" };
+  if (claimed.length !== ALGORITHMS[receipt.algorithm]) {
+    return { ok: false, error: "root has wrong length for algorithm" };
   }
 
   const seed = deriveSeed({
+    algorithm: receipt.algorithm,
     depth: receipt.depth,
     epoch: receipt.epoch,
-    contextCanonical
+    ctxInput
   });
-  const expected = assemble(seed, receipt.depth);
+  const expected = assemble(receipt.algorithm, seed, receipt.depth);
 
   if (!timingSafeEqual(expected, claimed)) {
     return { ok: false, error: "root mismatch" };
@@ -251,6 +308,7 @@ export function verifyReceipt(receipt, opts = {}) {
 /**
  * Derive an epoch string from a time window:
  *   cel:<window_seconds>:<window_number>
+ * where window_number = floor(unix_timestamp_seconds / window_seconds).
  *
  * @param {object} [opts]
  * @param {number} [opts.windowSeconds=300]
@@ -277,11 +335,19 @@ export function currentEpochs({ windowSeconds = 300, nowMs = Date.now() } = {}) 
 /**
  * Build a challenge object a server can hand to clients.
  */
-export function createChallenge({ depth, windowSeconds = 300, action, resource, extra = {} }) {
+export function createChallenge({
+  depth,
+  windowSeconds = 300,
+  action,
+  resource,
+  algorithm = DEFAULT_ALGORITHM,
+  extra = {}
+}) {
+  checkAlgorithm(algorithm);
   checkDepth(depth);
   return {
     version: VERSION,
-    algorithm: ALGORITHM,
+    algorithm,
     depth,
     epoch: deriveEpoch({ windowSeconds }),
     context: { action, resource, ...extra }
