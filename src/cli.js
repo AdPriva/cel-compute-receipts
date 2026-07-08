@@ -61,11 +61,37 @@ function usage() {
   cel challenge --depth N --action X [--resource Y] [--window-seconds 300]
   cel prove     --depth N --epoch E [--context JSON-or-string] [--algorithm sha256|sha512] [--output file.json]
   cel verify    --receipt file.json --max-depth N [--epoch E] [--window-seconds S]
-  cel bench     [--depth 100000]`);
+  cel bench     [--depth 100000]
+
+notes:
+  verify --epoch E           requires the receipt epoch to equal E exactly
+  verify --window-seconds S  accepts the current OR previous S-second window
+                             (use one or the other, not both)
+
+examples:
+  cel epoch
+  cel challenge --depth 10000 --action agent.message --resource /api/agent
+  cel prove --depth 10000 --epoch cel:300:5941344 --context '{"action":"test"}' --output receipt.json
+  cel verify --receipt receipt.json --max-depth 10000 --window-seconds 300
+  cel bench --depth 100000`);
+}
+
+function version() {
+  const pkg = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
+  console.log(pkg.version);
 }
 
 const [, , command, ...rest] = process.argv;
 const args = parseArgs(rest);
+
+if (command === "--version" || command === "-v" || args.version === true) {
+  version();
+  process.exit(0);
+}
+if (command === "help" || command === "--help" || command === "-h" || args.help === true) {
+  usage();
+  process.exit(0);
+}
 
 switch (command) {
   case "epoch": {
@@ -95,10 +121,19 @@ switch (command) {
     }
     const context = parseContext(args.context);
     const algorithm = typeof args.algorithm === "string" ? args.algorithm : undefined;
+    if (algorithm !== undefined && algorithm !== "sha256" && algorithm !== "sha512") {
+      console.error("error: --algorithm must be sha256 or sha512");
+      process.exit(2);
+    }
     const receipt = createReceipt({ depth, epoch: args.epoch, context, algorithm });
     const json = JSON.stringify(receipt, null, 2);
     if (typeof args.output === "string") {
-      writeFileSync(args.output, json + "\n");
+      try {
+        writeFileSync(args.output, json + "\n");
+      } catch (err) {
+        console.error(`error: could not write ${args.output}: ${err.message}`);
+        process.exit(2);
+      }
       console.error(`wrote receipt to ${args.output}`);
     } else {
       console.log(json);
@@ -113,7 +148,13 @@ switch (command) {
       process.exit(2);
     }
     const maxDepth = requireInt(args, "max-depth");
-    const receipt = JSON.parse(readFileSync(args.receipt, "utf8"));
+    let receipt;
+    try {
+      receipt = JSON.parse(readFileSync(args.receipt, "utf8"));
+    } catch (err) {
+      console.error(`error: could not read ${args.receipt}: ${err.message}`);
+      process.exit(2);
+    }
     const opts = { maxDepth };
     if (typeof args.epoch === "string") {
       opts.requiredEpoch = args.epoch;
@@ -137,8 +178,8 @@ switch (command) {
   case "bench": {
     const depth = args.depth ? requireInt(args, "depth") : 100000;
     const epoch = deriveEpoch();
-    for (const d of [Math.floor(depth / 100), Math.floor(depth / 10), depth]) {
-      if (d < 1) continue;
+    const steps = [...new Set([Math.floor(depth / 100), Math.floor(depth / 10), depth].filter((d) => d >= 1))];
+    for (const d of steps) {
       const t0 = process.hrtime.bigint();
       createReceipt({ depth: d, epoch, context: { bench: true } });
       const ms = Number(process.hrtime.bigint() - t0) / 1e6;
