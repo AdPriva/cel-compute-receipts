@@ -305,6 +305,12 @@ export function verifyReceipt(receipt, opts = {}) {
     return { ok: false, error: "root is not valid base64url" };
   }
   const claimed = Buffer.from(receipt.root, "base64url");
+  // Round-trip check enforces canonical unpadded base64url: Node's base64url
+  // decoder accepts multiple final characters that decode to the same bytes;
+  // re-encoding and comparing ensures only the canonical form is accepted.
+  if (base64url(claimed) !== receipt.root) {
+    return { ok: false, error: "root is not canonical base64url" };
+  }
   if (claimed.length !== ALGORITHMS[receipt.algorithm]) {
     return { ok: false, error: "root has wrong length for algorithm" };
   }
@@ -372,7 +378,8 @@ export function createChallenge({
   if (resource !== undefined && typeof resource !== "string") {
     throw new TypeError("resource must be a string when provided");
   }
-  if (extra === null || typeof extra !== "object" || Array.isArray(extra)) {
+  if (extra === null || typeof extra !== "object" || Array.isArray(extra) ||
+      Object.getPrototypeOf(extra) !== Object.prototype) {
     throw new TypeError("extra must be a plain object");
   }
   const context = resource === undefined
