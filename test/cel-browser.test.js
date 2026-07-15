@@ -71,15 +71,19 @@ test("browser verifier rejects non-canonical base64url roots", async () => {
   // A final base64url character with non-zero padding bits decodes to the same
   // bytes but is not the canonical encoding; the round-trip check must catch it.
   const receipt = await browserImpl.createReceipt({ depth: 1, epoch: "e", context: { a: 1 } });
-  // Substitute a different final char that still passes the charset regex but
-  // may not re-encode to the same string. We iterate a short alphabet to find
-  // one that is genuinely different and still a valid base64url char.
   const B64URL = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
   const original = receipt.root.at(-1);
-  const badChar = B64URL.split("").find(c => c !== original) ?? "A";
+  const idx = B64URL.indexOf(original);
+  // For a 32-byte digest, only alphabet indices that are multiples of 4 are
+  // canonical (the last 2 bits of the final symbol are unused padding). idx+1
+  // shares the same data bits but sets a padding bit, guaranteeing the same
+  // decoded bytes with a non-canonical encoding — not an arbitrary substitution
+  // that would just as likely hit "root mismatch" instead.
+  const badChar = B64URL[idx + 1];
   const bad = { ...receipt, root: receipt.root.slice(0, -1) + badChar };
   const result = await browserImpl.verifyReceipt(bad, { maxDepth: 1 });
   assert.equal(result.ok, false);
+  assert.equal(result.error, "root is not canonical base64url");
 });
 
 test("browser verifier enforces requiredContext parity with node", async () => {
