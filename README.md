@@ -3,7 +3,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 [![Node.js >=18](https://img.shields.io/badge/node-%3E%3D18-339933.svg)](https://nodejs.org/)
 [![Status: experimental](https://img.shields.io/badge/status-experimental-orange.svg)](#status)
-[![test](https://github.com/adpriva/cel-compute-receipts/actions/workflows/test.yml/badge.svg)](https://github.com/adpriva/cel-compute-receipts/actions/workflows/test.yml)
+[![test](https://github.com/AdPriva/cel-compute-receipts/actions/workflows/test.yml/badge.svg)](https://github.com/AdPriva/cel-compute-receipts/actions/workflows/test.yml)
 
 Computational Effort Layer, or CEL, is a lightweight reference implementation
 for compute receipts: work-bound artifacts that show a client spent a defined
@@ -14,7 +14,7 @@ public API calls, anonymous form submissions, decentralized messages, agent
 requests, queue admission, and other places where identity is weak or
 undesirable.
 
-Read the full paper: [Verifiable Inevitability of Computation](https://github.com/adpriva/cel-compute-receipts/blob/main/docs/CEL-paper.pdf).
+Read the full paper: [Verifiable Inevitability of Computation](https://github.com/AdPriva/cel-compute-receipts/blob/main/docs/CEL-paper.pdf).
 
 ## Try It in 60 Seconds
 
@@ -66,6 +66,34 @@ CEL does not prove that the caller is human, honest, unique, authorized, or
 well-intentioned. It only proves that a specific amount of work was performed
 for a specific context.
 
+## Why Linear Verification Is Acceptable
+
+CEL's v0 verifier recomputes the same chain the prover did, so verification
+costs roughly the same CPU as production. This is deliberately *not* the
+Hashcash-style asymmetry (expensive to produce, O(1) to check), and it is the
+first thing to understand before deploying CEL.
+
+Direct verification is a reasonable trade in a specific shape of deployment:
+
+- **Low-QPS, high-value actions.** Account creation, first post, agent
+  admission, checkout — flows where you gate a modest number of requests and
+  can afford a few milliseconds of verify CPU each. It is *not* a front-line
+  defense for high-volume flood traffic.
+- **Behind cheap prefilters.** Verification should be the last check, not the
+  first. IP/ASN reputation, rate limits, schema validation, and auth (where it
+  exists) should reject the bulk of junk *before* any chain is recomputed.
+- **With strict `maxDepth`.** The verifier caps recomputation, so a receipt can
+  never force more work than the policy allows. Pick a depth that is painful
+  for an attacker to produce at volume but cheap for you to check once.
+
+What CEL buys in exchange for giving up cheap verification is *deterministic*
+sequential work: no probabilistic puzzle, no lucky wins, and a cost that maps
+directly to a wall-clock-like amount of sequential hashing. If your threat model
+is "make each action provably pay a fixed compute toll" rather than "check a
+huge volume of proofs cheaply," that trade is the right one. If you need cheap
+verification at scale, wait for the succinct-verification work on the roadmap or
+use a VDF/SNARK-based construction instead.
+
 ## Could CEL Replace CAPTCHA-like Challenges?
 
 For some flows, yes. If the job of the CAPTCHA is really "make spam more
@@ -97,7 +125,7 @@ After npm publication:
 npm install cel-compute-receipts
 ```
 
-After npm publication, use the package API:
+Then use the package API:
 
 ```js
 import { createReceipt, verifyReceipt } from "cel-compute-receipts";
@@ -119,22 +147,17 @@ console.log(result.ok);
 Until npm publication, use a local checkout and import from `./src/cel.js`.
 From a local checkout, the CLI can also be run as `npx . <command>`.
 
-## Quick Start
+## CLI
 
-Create a receipt locally:
-
-```bash
-node ./src/cli.js prove \
-  --depth 10000 \
-  --epoch demo-2026-07-08 \
-  --context '{"action":"comment.create","resource":"/posts/123"}' \
-  --output receipt.json
-```
-
-Verify the receipt:
+The canonical prove/verify loop is shown in [Try It in 60 Seconds](#try-it-in-60-seconds).
+The full command surface:
 
 ```bash
+node ./src/cli.js epoch --window-seconds 300
+node ./src/cli.js challenge --depth 10000 --action agent.message --resource /api/agent
+node ./src/cli.js prove --depth 10000 --epoch cel:300:5941344 --context '{"action":"agent.message"}' --output receipt.json
 node ./src/cli.js verify --receipt receipt.json --max-depth 10000
+node ./src/cli.js bench --depth 100000
 ```
 
 When installed as a package, the CLI binary is `cel`:
@@ -142,16 +165,6 @@ When installed as a package, the CLI binary is `cel`:
 ```bash
 cel prove --depth 10000 --epoch demo --context '{"action":"agent.message"}' --output receipt.json
 cel verify --receipt receipt.json --max-depth 10000
-```
-
-## CLI
-
-```bash
-node ./src/cli.js epoch --window-seconds 300
-node ./src/cli.js challenge --depth 10000 --action agent.message --resource /api/agent
-node ./src/cli.js prove --depth 10000 --epoch cel:300:5941344 --context '{"action":"agent.message"}'
-node ./src/cli.js verify --receipt receipt.json --max-depth 10000
-node ./src/cli.js bench --depth 100000
 ```
 
 ## Epochs and Max Depth
@@ -194,8 +207,10 @@ A CEL receipt is plain JSON:
 }
 ```
 
-The `context` should include enough application data to prevent reuse across
-unrelated actions.
+The `context` should include enough application data to bind the receipt to the
+specific request — see [Security Considerations](#security-considerations) for
+what to bind and why. Note that `elapsedMs` is self-reported by the prover and
+carries no security weight; treat it as informational only.
 
 ## AI Agent Use Case
 
@@ -228,10 +243,26 @@ Before npm publication, use the local browser demo: serve the repo (`npx serve .
 ## Security Considerations
 
 - CEL is a compute-pricing primitive, not an identity or trust primitive.
-- Direct verification costs the verifier about as much CPU as the prover.
-- Verifiers must enforce maximum depth before recomputing a receipt.
-- Receipts should be bound to action, resource, method, audience, and epoch.
-- Short epochs or server-issued challenges help reduce replay.
+- Direct verification costs the verifier about as much CPU as the prover; see
+  [Why Linear Verification Is Acceptable](#why-linear-verification-is-acceptable)
+  for the deployment shape this assumes.
+- Verifiers must enforce maximum depth before recomputing a receipt, and must
+  enforce the route's minimum required depth (`receipt.depth >= policyDepth`) —
+  a receipt can be valid yet declare cheaper work than the endpoint demands.
+- **Bind the receipt to the request, not just its category.** `context` should
+  include a hash of the request payload (or another request-unique value), not
+  only `action`/`resource`/`method`. Otherwise a single receipt for, say,
+  `comment.create` can back many different comments within the same epoch.
+- **Replay rejection is stateful.** Nothing in the receipt format enforces
+  single use; to reject replays the server must keep a seen-root cache scoped to
+  the epoch. Budget for that memory and eviction under load.
+- **Precomputation is possible with time-window epochs.** If the epoch is a
+  fixed time window and there is no per-request server nonce, an attacker can
+  precompute receipts for an upcoming window offline and spend them in a burst.
+  Server-issued challenge epochs prevent this at the cost of statelessness —
+  choose the trade deliberately.
+- Short epochs or server-issued challenges reduce the replay and precomputation
+  windows.
 - The browser implementation proves more slowly than Node (each hash is an
   awaited WebCrypto call); use interactive depths there and see the roadmap
   for WASM.
@@ -264,11 +295,11 @@ npm run bench
 - [src/cli.js](./src/cli.js) - command-line tool
 - [test/cel.test.js](./test/cel.test.js) - unit tests
 - [test/cel-browser.test.js](./test/cel-browser.test.js) - cross-implementation interop tests
-- [docs/CEL-paper.pdf](https://github.com/adpriva/cel-compute-receipts/blob/main/docs/CEL-paper.pdf) - full paper (GitHub only, not in the npm package)
+- [docs/CEL-paper.pdf](https://github.com/AdPriva/cel-compute-receipts/blob/main/docs/CEL-paper.pdf) - full paper (GitHub only, not in the npm package)
 - [docs/protocol.md](./docs/protocol.md) - protocol notes
 - [docs/threat-model.md](./docs/threat-model.md) - deployment risks and limits
-- [docs/research-review.md](https://github.com/adpriva/cel-compute-receipts/blob/main/docs/research-review.md) - positioning and critique (GitHub only)
-- [docs/github-launch.md](https://github.com/adpriva/cel-compute-receipts/blob/main/docs/github-launch.md) - launch checklist (GitHub only)
+- [docs/research-review.md](https://github.com/AdPriva/cel-compute-receipts/blob/main/docs/research-review.md) - positioning and critique (GitHub only)
+- [docs/github-launch.md](https://github.com/AdPriva/cel-compute-receipts/blob/main/docs/github-launch.md) - launch checklist (GitHub only)
 - [examples/agent-gateway.js](./examples/agent-gateway.js) - HTTP example
 - [examples/browser-demo.html](./examples/browser-demo.html) - in-browser demo
 
