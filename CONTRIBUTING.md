@@ -158,4 +158,3 @@ open-ended questions once discussions are enabled for the repository.
 Please be respectful, precise, and constructive. Until this repository has a
 dedicated `CODE_OF_CONDUCT.md`, contributors are expected to follow the spirit
 of the [Contributor Covenant](https://www.contributor-covenant.org/).
-```
