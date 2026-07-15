@@ -255,13 +255,17 @@ test("non-canonical base64url roots are rejected", () => {
   // catch them all — only the canonical encoding is accepted.
   const B64URL = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
   const original = receipt.root.at(-1);
-  const alts = B64URL.split("").filter(c => c !== original).slice(0, 3);
-  for (const suffix of alts) {
-    const bad = { ...receipt, root: receipt.root.slice(0, -1) + suffix };
-    const result = verifyReceipt(bad, { maxDepth: 1 });
-    assert.equal(result.ok, false, `root ending in ${suffix} should fail`);
-    assert.match(result.error, /canonical base64url|root mismatch/);
-  }
+  const idx = B64URL.indexOf(original);
+  // For a 32-byte digest, only alphabet indices that are multiples of 4 are
+  // canonical (the last 2 bits of the final symbol are unused padding). idx+1
+  // shares the same data bits but sets a padding bit, guaranteeing the same
+  // decoded bytes with a non-canonical encoding — not an arbitrary substitution
+  // that would just as likely hit "root mismatch" instead.
+  const badChar = B64URL[idx + 1];
+  const bad = { ...receipt, root: receipt.root.slice(0, -1) + badChar };
+  const result = verifyReceipt(bad, { maxDepth: 1 });
+  assert.equal(result.ok, false);
+  assert.equal(result.error, "root is not canonical base64url");
 });
 
 test("oversized context is rejected on both sides", () => {
