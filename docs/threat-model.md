@@ -1,7 +1,6 @@
 # Threat Model
 
 CEL is useful when the defender wants to make an action cost computation.
-
 It is not useful when the defender must prove that a caller is a human, a unique
 person, authorized, reputable, or economically fair.
 
@@ -60,9 +59,19 @@ or alternative paths exist.
 
 ### Receipt Reuse and Precomputation
 
-Receipts are reusable unless the context and epoch prevent reuse. Bind receipts
-to an action, resource, method, audience, and short epoch where possible.
-Servers must enforce route-specific minimum depth. A receipt can be
+Context binding controls only *cross-context* reuse: it stops a receipt minted
+for one action, resource, method, audience, or epoch from being spent on a
+different one. It does **not** stop replay of an *identical* request. Two
+identical requests in the same epoch produce the same receipt, so preventing
+that requires a server-issued per-request nonce or a seen-root cache scoped to
+the epoch — not context binding alone.
+
+Bind receipts to an action, resource, method, audience, a hash of the request
+payload, and a short epoch where possible. Binding the payload hash matters:
+without it, one valid receipt for a broad context such as `comment.create` can
+back many different request bodies within the same epoch.
+
+Servers must also enforce route-specific minimum depth. A receipt can be
 cryptographically valid but still too cheap for the endpoint.
 
 Attackers can also generate receipts in advance for known future epochs or
@@ -99,7 +108,10 @@ CAPTCHA replacement will invite the wrong security review.
 - keep CEL verification behind normal IP/account/edge rate limits
 - accept at most the current and immediately previous time-window epoch
 - use server-issued nonces for higher-risk actions
-- bind context to the exact action, resource, method, and audience
+- bind context to the exact action, resource, method, audience, and a hash of
+  the request payload
+- prevent identical-request replay with a per-request nonce or a seen-root cache
+  scoped to the epoch (context binding alone does not do this)
 - reject oversized receipts before verification
 - enforce request size limits at the edge
 - log verification latency
