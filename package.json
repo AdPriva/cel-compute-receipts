@@ -50,7 +50,7 @@
     "anti-abuse",
     "rate-limiting",
     "ai-agents",
-    "captcha-alternative",
+    "sequential-hashing",
     "compute-receipts"
   ],
   "author": "Cem Sel <cem@adpriva.com>",
