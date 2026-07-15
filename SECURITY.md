@@ -34,8 +34,15 @@ vulnerabilities in this reference implementation:
 - hardware performance differences between phones, laptops, servers, GPUs, or
   specialized hardware
 - using CEL as a complete CAPTCHA, identity, fraud, reputation, or trust system
-- replay caused by deployments that do not bind receipts to an action, resource,
-  audience, and short epoch or challenge
+- replay caused by deployments that do not stop it at the deployment layer. CEL
+  binds a receipt to its context, but context binding only prevents *cross-context*
+  reuse; it does not stop replay of an *identical* request. Preventing that is
+  the deployment's responsibility via a server-issued per-request challenge nonce
+  or a seen-root cache scoped to the epoch (see Deployment Safeguards).
+- precomputation caused by deployments that use fixed time-window epochs with no
+  per-request challenge. An attacker can compute valid receipts for an upcoming
+  window offline and spend them in a burst; preventing this is a deployment
+  choice (server-issued challenge epochs), not an implementation bug.
 - verifier CPU exposure caused by deployments that do not enforce `maxDepth` or
   cheap request prefilters
 - social engineering, phishing, or compromise of downstream services that use
@@ -85,8 +92,14 @@ much CPU as provers. Even with valid receipts, production deployments should
 enforce:
 
 - strict maximum depths through `maxDepth`
-- short epoch windows
-- context binding for action, resource, method, and audience
+- short epoch windows, and server-issued challenge epochs rather than pure time
+  windows wherever burst-precomputation matters
+- context binding for action, resource, method, audience, and a hash of the
+  request payload, so a receipt cannot be reused across different requests that
+  share the same action or resource
+- a replay defense: a server-issued per-request challenge nonce, or a seen-root
+  cache scoped to the epoch. Context binding alone does not stop replay of an
+  identical request
 - request size limits
 - cheap rejection before expensive verification
 - ordinary rate limits around CEL verification
