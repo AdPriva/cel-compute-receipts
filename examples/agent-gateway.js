@@ -35,6 +35,12 @@
  *     receipt into the request body
  *   - browser-based agents would additionally need CORS headers; this example
  *     is Node-to-Node only
+ *   - verifyReceipt() below runs synchronously and blocks Node's single
+ *     event loop for its full duration (tens of ms at realistic depths) —
+ *     every other connection on this process stalls until it returns. This
+ *     example accepts that for clarity; a production gateway should run
+ *     verification in a worker_threads pool (or a separate process) instead
+ *     of calling it inline in the request handler.
  */
 
 import { createServer } from "node:http";
@@ -212,7 +218,9 @@ function startServer() {
       return;
     }
 
-    /* Expensive verification last. */
+    /* Expensive verification last. This call is synchronous and blocks the
+     * event loop for its full duration — see the "Production notes" comment
+     * at the top of this file. Offload to a worker thread in production. */
 
     const result = verifyReceipt(receipt, {
       maxDepth: MAX_DEPTH,
