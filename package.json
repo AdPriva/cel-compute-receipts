@@ -1,6 +1,6 @@
 {
   "name": "cel-compute-receipts",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Compute receipts for pricing digital actions without identity or behavioral classification.",
   "type": "module",
   "sideEffects": false,
