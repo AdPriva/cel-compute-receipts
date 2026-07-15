@@ -30,7 +30,8 @@ yet enforce a separate linter, formatter, or type checker.
 - Improve browser demos and mobile benchmarks
 - Document threat models
 - Prototype alternative policy modules
-- Add replay-resistant challenge examples
+- Add a distributed/shared-store replay-cache example (Redis, etc.) for
+  multi-instance deployments
 - Compare CEL with Hashcash, client puzzles, and VDFs
 
 ## Scope Reminder
@@ -143,6 +144,10 @@ change affects:
 Avoid overclaiming. The project should describe CEL as a compute-receipt or
 compute-pricing primitive, not as a full abuse-prevention system by itself.
 
+`docs/CEL-paper.pdf` is compiled from source not currently tracked in this
+repository. To propose changes to the paper's wording or claims, open an issue
+describing the change rather than attempting to edit the PDF directly.
+
 ## Getting Help
 
 Use GitHub Issues for bugs and concrete proposals. Use GitHub Discussions for
@@ -153,3 +158,4 @@ open-ended questions once discussions are enabled for the repository.
 Please be respectful, precise, and constructive. Until this repository has a
 dedicated `CODE_OF_CONDUCT.md`, contributors are expected to follow the spirit
 of the [Contributor Covenant](https://www.contributor-covenant.org/).
+```
