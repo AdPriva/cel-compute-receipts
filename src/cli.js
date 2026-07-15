@@ -111,6 +111,9 @@ notes:
   verify --epoch E           requires the receipt epoch to equal E exactly
   verify --window-seconds S  accepts the current OR previous S-second window
                              (use one or the other, not both)
+  verify (neither given)     epoch is not checked at all — any epoch is
+                             accepted; pass --epoch or --window-seconds to
+                             enforce freshness
   verify --context C         requires the receipt context to match C exactly
   verify --action/--resource require those individual context fields to match
                              (tolerates extra fields such as a nonce)
